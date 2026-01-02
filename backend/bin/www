@@ -25,7 +25,9 @@ var server = http.createServer(app);
  * Listen on provided port, on all network interfaces.
  */
 
-server.listen(port);
+// Listen on provided port on all network interfaces (0.0.0.0)
+// Explicit bind to 0.0.0.0 avoids IPv6-only localhost binding surprises.
+server.listen(port, '0.0.0.0');
 server.on('error', onError);
 server.on('listening', onListening);
 
@@ -86,5 +88,7 @@ function onListening() {
   var bind = typeof addr === 'string'
     ? 'pipe ' + addr
     : 'port ' + addr.port;
+  // Helpful console log so running the server locally shows where to connect.
   debug('Listening on ' + bind);
+  console.log('Backend listening on ' + bind + ' (bound to 0.0.0.0)');
 }
