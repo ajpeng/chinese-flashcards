@@ -52,7 +52,7 @@ export default function Health(): React.ReactElement {
       )}
 
       {data && (
-        <pre style={{ background: '#f6f8fa', padding: 12, borderRadius: 6 }}>
+        <pre style={{ padding: 12, borderRadius: 6 }}>
           {JSON.stringify(data, null, 2)}
         </pre>
       )}
