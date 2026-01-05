@@ -4,10 +4,19 @@ import viteLogo from '/vite.svg'
 import './App.css'
 import Health from './pages/Health'
 import Articles from './pages/Articles'
+import useTheme from './theme'
 
 function App() {
   const [count, setCount] = useState(0)
   const [page, setPage] = useState<'home' | 'health' | 'articles'>('home')
+
+  const [theme, setTheme] = useTheme();
+
+  const cycleTheme = () => {
+    if (theme === 'light') setTheme('dark');
+    else if (theme === 'dark') setTheme('system');
+    else setTheme('light');
+  };
 
   return (
     <div className="App">
@@ -27,6 +36,9 @@ function App() {
           </button>
           <button onClick={() => setPage('health')}>Health</button>
           <button onClick={() => setPage('articles')}>Articles</button>
+          <button aria-label="Toggle theme" title={`Theme: ${theme}`} onClick={cycleTheme}>
+            Theme: {theme}
+          </button>
         </nav>
       </header>
 

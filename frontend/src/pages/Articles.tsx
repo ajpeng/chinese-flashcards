@@ -73,19 +73,10 @@ export default function Articles(): React.ReactElement {
       {data && data.length > 0 && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           {data.map((article) => (
-            <article
-              key={article.id}
-              style={{
-                padding: 16,
-                borderRadius: 8,
-                border: '1px solid #e0e0e0',
-                boxShadow: '0 1px 3px rgba(0, 0, 0, 0.06)',
-                backgroundColor: '#fff',
-              }}
-            >
+            <article key={article.id} className="card">
               <header style={{ marginBottom: 8 }}>
                 <h3 style={{ margin: 0 }}>{article.title}</h3>
-                <div style={{ fontSize: 12, color: '#666', marginTop: 4 }}>
+                <div className="muted">
                   HSK level: <strong>{article.hskLevel}</strong>
                   {article.createdAt && (
                     <>
