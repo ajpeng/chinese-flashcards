@@ -33,6 +33,8 @@ app.use(express.static(path.join(PROJECT_ROOT, 'public')));
 
 app.use('/', indexRouter);
 app.use('/users', usersRouter);
+// Expose the same users routes under /api/users for API-style endpoints
+app.use('/api/users', usersRouter);
 app.use('/health', healthRouter);
 app.use('/api/articles', articlesRouter);
 
