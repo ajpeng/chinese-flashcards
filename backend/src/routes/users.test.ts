@@ -46,3 +46,25 @@ describe('GET /api/users/mock/flashcards', () => {
     expect(after.body[0]).toMatchObject({ wordId: 7 });
   });
 });
+
+describe('DELETE /api/users/mock/flashcards', () => {
+  it('returns 400 for invalid payload', async () => {
+    const res = await request(app).delete('/api/users/mock/flashcards').send({ wordId: 'nope' });
+    expect(res.status).toBe(400);
+    expect(res.body).toHaveProperty('error');
+  });
+
+  it('removes a previously stored flashcard', async () => {
+    await request(app).post('/api/users/mock/flashcards').send({ wordId: 99 });
+    const before = await request(app).get('/api/users/mock/flashcards');
+    expect(before.body.some((r: any) => r.wordId === 99)).toBe(true);
+
+    const res = await request(app).delete('/api/users/mock/flashcards').send({ wordId: 99 });
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveProperty('removed');
+    expect(res.body.removed).toBeGreaterThanOrEqual(1);
+
+    const after = await request(app).get('/api/users/mock/flashcards');
+    expect(after.body.some((r: any) => r.wordId === 99)).toBe(false);
+  });
+});

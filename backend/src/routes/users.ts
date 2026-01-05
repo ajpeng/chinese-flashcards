@@ -1,5 +1,5 @@
 import { Router, Request, Response, NextFunction } from 'express';
-import { addFlashcard, listFlashcards } from '../mock/mockFlashcardsStore';
+import { addFlashcard, listFlashcards, removeFlashcard } from '../mock/mockFlashcardsStore';
 
 const router = Router();
 
@@ -25,6 +25,22 @@ router.post('/mock/flashcards', (req: Request, res: Response) => {
   console.log('Mock flashcard added:', rec);
 
   return res.status(201).json(rec);
+});
+
+// DELETE /mock/flashcards - accepts JSON { wordId: number }
+router.delete('/mock/flashcards', (req: Request, res: Response) => {
+  const { wordId } = req.body ?? {};
+  if (typeof wordId !== 'number' || !Number.isInteger(wordId) || wordId <= 0) {
+    return res.status(400).json({ error: 'wordId must be a positive integer' });
+  }
+
+  const userId = 'mock-user';
+  const removed = removeFlashcard(userId, wordId);
+
+  // eslint-disable-next-line no-console
+  console.log('Mock flashcard(s) removed:', { userId, wordId, removed });
+
+  return res.json({ removed });
 });
 
 // GET /mock/flashcards - list records (for debugging/testing)

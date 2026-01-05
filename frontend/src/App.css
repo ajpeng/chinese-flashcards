@@ -53,43 +53,15 @@
 }
 
 .word-token::after {
-  content: attr(data-pinyin) "\A" attr(data-english);
-  white-space: pre;
-  position: absolute;
-  bottom: 130%;
-  left: 50%;
-  transform: translateX(-50%);
-  background: rgba(0,0,0,0.85);
-  color: #fff;
-  padding: 6px 8px;
-  border-radius: 6px;
-  font-size: 12px;
-  line-height: 1.2;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 120ms;
-  z-index: 30;
+  /* removed: tooltip is now a DOM node (.token-popup) for accessibility and to contain interactive actions */
+  content: none;
 }
 
 .word-token::before {
-  content: '';
-  position: absolute;
-  bottom: 120%;
-  left: 50%;
-  transform: translateX(-50%);
-  border-width: 6px;
-  border-style: solid;
-  border-color: rgba(0,0,0,0.85) transparent transparent transparent;
-  opacity: 0;
-  transition: opacity 120ms;
-  z-index: 31;
+  content: none;
 }
 
-.word-token:hover::after,
-.word-token:hover::before {
-  opacity: 1;
-}
-
+/* keep legacy pseudo-element rules disabled (replaced by .token-popup) */
 /* Show pinyin above the word when explicit pinyin is enabled via DOM (ruby)
    and style the small rt text */
 .word-token ruby {
@@ -113,6 +85,68 @@
   font-weight: 500;
 }
 
+/* TOKEN POPUP (pinyin + actions) */
+.token-popup {
+  position: absolute;
+  bottom: 135%;
+  left: 50%;
+  transform: translateX(-50%) translateY(6px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: #fff;
+  color: #111;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+  min-width: 120px;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  z-index: 50;
+  transition: opacity 120ms ease, transform 120ms ease, visibility 120ms ease;
+}
+
+.word-token:hover .token-popup,
+.word-token:focus .token-popup,
+.word-token:focus-within .token-popup {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transform: translateX(-50%) translateY(0);
+}
+
+.token-popup .popup-pinyin {
+  font-weight: 700;
+  font-size: 0.92em;
+}
+
+.token-popup .popup-english {
+  font-size: 0.82em;
+  color: #666;
+}
+
+.token-popup .popup-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-top: 4px;
+}
+
+.token-popup::after {
+  /* small arrow */
+  content: '';
+  position: absolute;
+  bottom: -8px;
+  left: 50%;
+  transform: translateX(-50%);
+  border-width: 8px 8px 0 8px;
+  border-style: solid;
+  border-color: #fff transparent transparent transparent;
+  filter: drop-shadow(0 -2px 4px rgba(0,0,0,0.06));
+}
+
 /* Keyboard focus should also reveal tooltip (for accessibility) */
 .word-token:focus::after,
 .word-token:focus::before {
@@ -122,4 +156,72 @@
 .word-token:focus {
   outline: none;
   box-shadow: 0 0 0 3px rgba(100,149,255,0.18);
+}
+
+/* Save button inside popup (inline, part of the popup UI) */
+.token-popup .save-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 28px;
+  min-width: 36px;
+  padding: 4px 8px;
+  font-size: 14px;
+  color: #ffb400; /* star color */
+  background: linear-gradient(180deg, #fff, #fcfcfc);
+  border: 1px solid rgba(0,0,0,0.06);
+  border-radius: 6px;
+  line-height: 1;
+  cursor: pointer;
+  transition: transform 140ms ease, opacity 120ms ease;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.08);
+  z-index: 55;
+}
+
+.token-popup .save-btn:hover {
+  transform: translateY(-2px) scale(1.04);
+}
+
+.token-popup .save-btn[disabled] {
+  opacity: 0.6;
+  cursor: default;
+}
+
+/* ensure pinyin rt layer sits beneath popup */
+.word-token ruby rt {
+  position: relative;
+  z-index: 30;
+}
+
+/* Saved confirmation as an inline badge inside the popup */
+.token-popup .saved-confirm {
+  background: #2d8f2d;
+  color: #fff;
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-weight: 600;
+  font-size: 0.82em;
+  white-space: nowrap;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+}
+
+/* Toggle button styling for cleaner single control */
+.learn-toggle {
+  padding: 4px 8px;
+  border-radius: 6px;
+  border: 1px solid rgba(0,0,0,0.08);
+  background: #f6f6f6;
+  cursor: pointer;
+}
+
+.learn-toggle[aria-pressed="true"] {
+  background: #e6ffe6;
+  border-color: rgba(45,143,45,0.25);
+  color: #1b7a1b;
+  font-weight: 600;
+}
+
+.learn-toggle[disabled] {
+  opacity: 0.7;
+  cursor: default;
 }

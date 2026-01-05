@@ -68,7 +68,7 @@ function tokenize(content: string, words: Word[]): Token[] {
   return tokens;
 }
 
-function ArticleContent({ content, words, showPinyin = false }: { content: string; words: Word[]; showPinyin?: boolean }) {
+function ArticleContent({ content, words, showPinyin = false, onToggle, markingSet, savedSet, learnedSet }: { content: string; words: Word[]; showPinyin?: boolean; onToggle?: (wordId: number) => Promise<boolean>; markingSet?: Set<number>; savedSet?: Set<number>; learnedSet?: Set<number> }) {
   const tokens = useMemo(() => tokenize(content, words), [content, words]);
   return (
     <p style={{ lineHeight: 1.6 }}>
@@ -77,7 +77,7 @@ function ArticleContent({ content, words, showPinyin = false }: { content: strin
 
         if (showPinyin) {
           // When pinyin is shown, render every token as a ruby so the pinyin
-          // line stays aligned; use a blank rt (NBSP) for tokens without pinyin.
+          // line stays aligned; and include a popup that contains pinyin + actions
           return (
             <span
               key={key}
@@ -93,11 +93,40 @@ function ArticleContent({ content, words, showPinyin = false }: { content: strin
                 {t.text}
                 <rt>{t.word ? t.word.pinyin : '\u00A0'}</rt>
               </ruby>
+
+              {t.word && (
+                <div className="token-popup" role="tooltip">
+                  <div className="popup-text">
+                    <div className="popup-pinyin">{t.word.pinyin}</div>
+                    <div className="popup-english">{t.word.english}</div>
+                  </div>
+                  <div className="popup-actions">
+                    {onToggle && (
+                      <button
+                        type="button"
+                        className="save-btn"
+                        onClick={async (e) => {
+                          e.stopPropagation();
+                          await onToggle(t.word!.id);
+                        }}
+                        disabled={markingSet?.has(t.word.id)}
+                        title={learnedSet?.has(t.word.id) ? 'Unlearn word' : 'Save word'}
+                      >
+                        {learnedSet?.has(t.word.id) ? '★' : '☆'}
+                      </button>
+                    )}
+
+                    {savedSet?.has(t.word.id) && (
+                      <span className="saved-confirm">Saved!</span>
+                    )}
+                  </div>
+                </div>
+              )}
             </span>
           );
         }
 
-        // Default (no pinyin shown): render normally
+        // Default (no pinyin shown): render normally with optional popup for actions
         return t.word ? (
           <span
             key={key}
@@ -110,6 +139,36 @@ function ArticleContent({ content, words, showPinyin = false }: { content: strin
             tabIndex={0}
           >
             {t.text}
+
+            {t.word && (
+              <div className="token-popup" role="tooltip">
+                <div className="popup-text">
+                  <div className="popup-pinyin">{t.word.pinyin}</div>
+                  <div className="popup-english">{t.word.english}</div>
+                </div>
+                <div className="popup-actions">
+                  {onToggle && (
+                    <button
+                      type="button"
+                      className="save-btn"
+                      onClick={async (e) => {
+                        e.stopPropagation();
+                        await onToggle(t.word!.id);
+                      }}
+                      disabled={markingSet?.has(t.word.id)}
+                      title={learnedSet?.has(t.word.id) ? 'Unlearn word' : 'Save word'}
+                      aria-pressed={learnedSet?.has(t.word.id)}
+                    >
+                      {learnedSet?.has(t.word.id) ? '★' : '☆'}
+                    </button>
+                  )}
+
+                  {savedSet?.has(t.word.id) && (
+                    <span className="saved-confirm">Saved!</span>
+                  )}
+                </div>
+              </div>
+            )}
           </span>
         ) : (
           <span key={key}>{t.text}</span>
@@ -124,6 +183,105 @@ export default function Articles(): React.ReactElement {
   const [data, setData] = useState<Article[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [showPinyin, setShowPinyin] = useState<boolean>(false);
+
+  // Learned word IDs (synchronized with mock backend) and marking state for in-flight requests
+  const [learnedIds, setLearnedIds] = useState<number[]>([]);
+  const [markingIds, setMarkingIds] = useState<number[]>([]);
+  const [savedIds, setSavedIds] = useState<number[]>([]);
+  const learnedSet = useMemo(() => new Set(learnedIds), [learnedIds]);
+  const markingSet = useMemo(() => new Set(markingIds), [markingIds]);
+  const savedSet = useMemo(() => new Set(savedIds), [savedIds]);
+
+  // Fetch initial learned IDs from mock endpoint
+  useEffect(() => {
+    const fetchLearned = async () => {
+      try {
+        const res = await fetch('/api/users/mock/flashcards');
+        if (!res.ok) return;
+        const json = await res.json();
+        const ids = Array.isArray(json) ? (json as Array<{ wordId?: number }>).map((r) => r.wordId).filter((n): n is number => typeof n === 'number') : [];
+        setLearnedIds(ids);
+      } catch (err) {
+        console.error('Failed to load learned words', err);
+      }
+    };
+
+    void fetchLearned();
+  }, []);
+
+  const markLearned = async (wordId: number): Promise<boolean> => {
+    if (learnedSet.has(wordId) || markingSet.has(wordId)) return false;
+    setMarkingIds((s) => [...s, wordId]);
+
+    try {
+      const res = await fetch('/api/users/mock/flashcards', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ wordId }),
+      });
+
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(text || `HTTP ${res.status}`);
+      }
+
+      setLearnedIds((s) => (s.includes(wordId) ? s : [...s, wordId]));
+      return true;
+    } catch (err: unknown) {
+      console.error('Failed to mark learned', err);
+      // Minimal user feedback for now
+      alert('Failed to mark word as learned');
+      return false;
+    } finally {
+      setMarkingIds((s) => s.filter((id) => id !== wordId));
+    }
+  };
+
+  const unlearn = async (wordId: number): Promise<boolean> => {
+    if (!learnedSet.has(wordId) || markingSet.has(wordId)) return false;
+    setMarkingIds((s) => [...s, wordId]);
+
+    try {
+      const res = await fetch('/api/users/mock/flashcards', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ wordId }),
+      });
+
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(text || `HTTP ${res.status}`);
+      }
+
+      setLearnedIds((s) => s.filter((id) => id !== wordId));
+      setSavedIds((s) => s.filter((id) => id !== wordId));
+      return true;
+    } catch (err: unknown) {
+      console.error('Failed to unlearn', err);
+      alert('Failed to unlearn word');
+      return false;
+    } finally {
+      setMarkingIds((s) => s.filter((id) => id !== wordId));
+    }
+  };
+  const saveWord = async (wordId: number) => {
+    // Call markLearned so the same endpoint is used (and learned state is updated)
+    const ok = await markLearned(wordId);
+    if (!ok) return false;
+
+    // Show a quick saved confirmation
+    setSavedIds((s) => (s.includes(wordId) ? s : [...s, wordId]));
+    setTimeout(() => setSavedIds((s) => s.filter((id) => id !== wordId)), 1400);
+    return true;
+  };
+
+  const toggleLearn = async (wordId: number) => {
+    if (learnedSet.has(wordId)) {
+      return await unlearn(wordId);
+    }
+    return await saveWord(wordId);
+  };
+
 
   const fetchArticles = async () => {
     setLoading(true);
@@ -192,7 +350,7 @@ export default function Articles(): React.ReactElement {
                 </div>
               </header>
 
-              <ArticleContent content={article.content} words={article.words} showPinyin={showPinyin} />
+              <ArticleContent content={article.content} words={article.words} showPinyin={showPinyin} onToggle={toggleLearn} markingSet={markingSet} savedSet={savedSet} learnedSet={learnedSet} />
 
               {article.words && article.words.length > 0 && (
                 <section style={{ marginTop: 12 }}>
@@ -204,8 +362,7 @@ export default function Articles(): React.ReactElement {
                           <th style={{ textAlign: 'left', borderBottom: '1px solid #ddd', padding: 4 }}>Han Zi</th>
                           <th style={{ textAlign: 'left', borderBottom: '1px solid #ddd', padding: 4 }}>Pinyin</th>
                           <th style={{ textAlign: 'left', borderBottom: '1px solid #ddd', padding: 4 }}>English</th>
-                          <th style={{ textAlign: 'left', borderBottom: '1px solid #ddd', padding: 4 }}>HSK</th>
-                        </tr>
+                          <th style={{ textAlign: 'left', borderBottom: '1px solid #ddd', padding: 4 }}>HSK</th>                          <th style={{ textAlign: 'left', borderBottom: '1px solid #ddd', padding: 4 }}>Action</th>                        </tr>
                       </thead>
                       <tbody>
                         {article.words.map((word) => (
@@ -214,6 +371,17 @@ export default function Articles(): React.ReactElement {
                             <td style={{ padding: 4, borderBottom: '1px solid #f0f0f0' }}>{word.pinyin}</td>
                             <td style={{ padding: 4, borderBottom: '1px solid #f0f0f0' }}>{word.english}</td>
                             <td style={{ padding: 4, borderBottom: '1px solid #f0f0f0' }}>{word.hskLevel}</td>
+                            <td style={{ padding: 4, borderBottom: '1px solid #f0f0f0' }}>
+                              <button
+                                className="learn-toggle"
+                                onClick={() => void (learnedSet.has(word.id) ? unlearn(word.id) : markLearned(word.id))}
+                                disabled={markingSet.has(word.id)}
+                                aria-pressed={learnedSet.has(word.id)}
+                                title={learnedSet.has(word.id) ? 'Unlearn this word' : 'Mark this word as learned'}
+                              >
+                                {markingSet.has(word.id) ? (learnedSet.has(word.id) ? 'Unlearning…' : 'Marking…') : (learnedSet.has(word.id) ? 'Learned' : 'Mark learned')}
+                              </button>
+                            </td>
                           </tr>
                         ))}
                       </tbody>
