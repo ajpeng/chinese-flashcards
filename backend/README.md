@@ -39,3 +39,13 @@ node -e "const app=require('./backend/app'); const s=app.listen(0,()=>{ const po
 
 Notes:
 - This is a simple readiness endpoint and does not perform deep dependency checks (database, caches). If you need liveness/readiness probes for Kubernetes, consider adding checks for dependent services.
+- The `/test-db` endpoint uses the shared Postgres pool from `db.js`, which expects these environment variables:
+  - `DB_USER` — database user (matches `POSTGRES_USER` in `docker-compose.yml` if you use the provided Postgres container).
+  - `DB_PASSWORD` — database password (matches `POSTGRES_PASSWORD`).
+  - `DB_NAME` — database name (matches `POSTGRES_DB`).
+  For example, when using the default `docker-compose.yml` values:
+  ```bash
+  export DB_USER=myuser
+  export DB_PASSWORD=mypassword
+  export DB_NAME=mydatabase
+  ```

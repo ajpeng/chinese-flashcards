@@ -1,10 +1,10 @@
 const { Pool } = require('pg');
 
 const pool = new Pool({
-  user: 'myuser',
+  user: process.env.DB_USER,
   host: 'localhost', // Use 'db' if Express is also running inside Docker
-  database: 'mydatabase',
-  password: 'mypassword',
+  database: process.env.DB_NAME,
+  password: process.env.DB_PASSWORD,
   port: 5432,
 });
 
