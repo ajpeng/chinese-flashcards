@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 
 export type Word = {
   id: number;
@@ -17,6 +17,81 @@ export type Article = {
   updatedAt?: string;
   words: Word[];
 };
+
+type Token = { text: string; word?: Word };
+
+function buildLookup(words: Word[]) {
+  const map = new Map<string, Word>();
+  let maxLen = 1;
+  for (const w of words) {
+    map.set(w.simplified, w);
+    maxLen = Math.max(maxLen, w.simplified.length);
+  }
+  return { map, maxLen };
+}
+
+function tokenize(content: string, words: Word[]): Token[] {
+  if (!content) return [];
+  const { map, maxLen } = buildLookup(words || []);
+  const tokens: Token[] = [];
+  const isHan = (ch: string) => /[\u4E00-\u9FFF]/.test(ch); // basic CJK check
+  let i = 0;
+
+  while (i < content.length) {
+    const ch = content[i];
+
+    if (!isHan(ch)) {
+      let j = i + 1;
+      while (j < content.length && !isHan(content[j])) j++;
+      tokens.push({ text: content.slice(i, j) });
+      i = j;
+      continue;
+    }
+
+    let matched: Word | undefined;
+    let matchedLen = 0;
+    for (let len = Math.min(maxLen, content.length - i); len > 0; len--) {
+      const sub = content.substr(i, len);
+      const w = map.get(sub);
+      if (w) { matched = w; matchedLen = len; break; }
+    }
+
+    if (matched) {
+      tokens.push({ text: content.substr(i, matchedLen), word: matched });
+      i += matchedLen;
+    } else {
+      tokens.push({ text: ch });
+      i++;
+    }
+  }
+
+  return tokens;
+}
+
+function ArticleContent({ content, words }: { content: string; words: Word[] }) {
+  const tokens = useMemo(() => tokenize(content, words), [content, words]);
+  return (
+    <p style={{ lineHeight: 1.6 }}>
+      {tokens.map((t, idx) =>
+        t.word ? (
+          <span
+            key={idx}
+            title={`${t.word.pinyin} — ${t.word.english}`}
+            data-pinyin={t.word.pinyin}
+            data-english={t.word.english}
+            style={{ cursor: 'help', background: 'rgba(255, 255, 0, 0.06)' }}
+            className="word-token"
+            aria-label={`${t.word.simplified}, pinyin ${t.word.pinyin}, ${t.word.english}`}
+          >
+            {t.text}
+          </span>
+        ) : (
+          <span key={idx}>{t.text}</span>
+        )
+      )}
+    </p>
+  );
+}
 
 export default function Articles(): React.ReactElement {
   const [loading, setLoading] = useState<boolean>(true);
@@ -88,7 +163,7 @@ export default function Articles(): React.ReactElement {
                 </div>
               </header>
 
-              <p style={{ lineHeight: 1.6 }}>{article.content}</p>
+              <ArticleContent content={article.content} words={article.words} />
 
               {article.words && article.words.length > 0 && (
                 <section style={{ marginTop: 12 }}>
