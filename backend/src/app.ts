@@ -8,6 +8,7 @@ import logger from 'morgan';
 import indexRouter from './routes/index';
 import usersRouter from './routes/users';
 import healthRouter from './routes/health';
+import articlesRouter from './routes/articles';
 import pool from './db';
 
 const app: Application = express();
@@ -33,6 +34,7 @@ app.use(express.static(path.join(PROJECT_ROOT, 'public')));
 app.use('/', indexRouter);
 app.use('/users', usersRouter);
 app.use('/health', healthRouter);
+app.use('/api/articles', articlesRouter);
 
 // catch 404 and forward to error handler
 app.use((req: Request, res: Response, next: NextFunction) => {

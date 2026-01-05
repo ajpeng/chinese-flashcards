@@ -1,7 +1,7 @@
 // Seed script for initial Article and Word data
 // Run with: npx prisma db seed
 
-const { PrismaClient } = require('@prisma/client');
+const { PrismaClient } = require('../generated/prisma');
 
 const prisma = new PrismaClient()
 

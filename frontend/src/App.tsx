@@ -3,10 +3,11 @@ import reactLogo from './assets/react.svg'
 import viteLogo from '/vite.svg'
 import './App.css'
 import Health from './pages/Health'
+import Articles from './pages/Articles'
 
 function App() {
   const [count, setCount] = useState(0)
-  const [page, setPage] = useState<'home' | 'health'>('home')
+  const [page, setPage] = useState<'home' | 'health' | 'articles'>('home')
 
   return (
     <div className="App">
@@ -20,16 +21,17 @@ function App() {
           </a>
         </div>
         <h1 style={{ margin: 0 }}>Vite + React</h1>
-        <nav style={{ marginLeft: 'auto' }}>
-          <button onClick={() => setPage('home')} style={{ marginRight: 8 }}>
+        <nav style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
+          <button onClick={() => setPage('home')}>
             Home
           </button>
           <button onClick={() => setPage('health')}>Health</button>
+          <button onClick={() => setPage('articles')}>Articles</button>
         </nav>
       </header>
 
       <main style={{ padding: 16 }}>
-        {page === 'home' ? (
+        {page === 'home' && (
           <>
             <div className="card">
               <button onClick={() => setCount((c) => c + 1)}>
@@ -41,9 +43,10 @@ function App() {
             </div>
             <p className="read-the-docs">Click on the Vite and React logos to learn more</p>
           </>
-        ) : (
-          <Health />
         )}
+
+        {page === 'health' && <Health />}
+        {page === 'articles' && <Articles />}
       </main>
     </div>
   )
