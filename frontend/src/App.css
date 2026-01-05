@@ -89,3 +89,37 @@
 .word-token:hover::before {
   opacity: 1;
 }
+
+/* Show pinyin above the word when explicit pinyin is enabled via DOM (ruby)
+   and style the small rt text */
+.word-token ruby {
+  /* Prefer the native ruby positioning, and as a robust fallback use a
+     column-reverse inline-flex so the <rt> appears above the base text. */
+  ruby-position: over;
+  display: inline-flex;
+  flex-direction: column-reverse;
+  align-items: center;
+  line-height: 1;
+  gap: 0.06rem; /* tighten the gap so pinyin sits close to the char */
+  font-size: 1.04em; /* make the Chinese base slightly larger than surrounding text */
+}
+
+.word-token ruby rt {
+  font-size: 0.58em; /* smaller pinyin so it visually sits above cleanly */
+  color: #444;
+  line-height: 1;
+  display: block;
+  transform: translateY(-0.02em); /* nudge pinyin slightly closer */
+  font-weight: 500;
+}
+
+/* Keyboard focus should also reveal tooltip (for accessibility) */
+.word-token:focus::after,
+.word-token:focus::before {
+  opacity: 1;
+}
+
+.word-token:focus {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(100,149,255,0.18);
+}

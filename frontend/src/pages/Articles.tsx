@@ -68,27 +68,53 @@ function tokenize(content: string, words: Word[]): Token[] {
   return tokens;
 }
 
-function ArticleContent({ content, words }: { content: string; words: Word[] }) {
+function ArticleContent({ content, words, showPinyin = false }: { content: string; words: Word[]; showPinyin?: boolean }) {
   const tokens = useMemo(() => tokenize(content, words), [content, words]);
   return (
     <p style={{ lineHeight: 1.6 }}>
-      {tokens.map((t, idx) =>
-        t.word ? (
+      {tokens.map((t, idx) => {
+        const key = t.word ? `w-${t.word.id}-${idx}` : `t-${idx}`;
+
+        if (showPinyin) {
+          // When pinyin is shown, render every token as a ruby so the pinyin
+          // line stays aligned; use a blank rt (NBSP) for tokens without pinyin.
+          return (
+            <span
+              key={key}
+              title={t.word ? `${t.word.pinyin} — ${t.word.english}` : undefined}
+              data-pinyin={t.word?.pinyin ?? ''}
+              data-english={t.word?.english ?? ''}
+              style={{ cursor: t.word ? 'help' : 'default', background: t.word ? 'rgba(255, 255, 0, 0.06)' : 'transparent' }}
+              className="word-token"
+              aria-label={t.word ? `${t.word.simplified}, pinyin ${t.word.pinyin}, ${t.word.english}` : undefined}
+              tabIndex={t.word ? 0 : -1}
+            >
+              <ruby>
+                {t.text}
+                <rt>{t.word ? t.word.pinyin : '\u00A0'}</rt>
+              </ruby>
+            </span>
+          );
+        }
+
+        // Default (no pinyin shown): render normally
+        return t.word ? (
           <span
-            key={idx}
+            key={key}
             title={`${t.word.pinyin} — ${t.word.english}`}
             data-pinyin={t.word.pinyin}
             data-english={t.word.english}
             style={{ cursor: 'help', background: 'rgba(255, 255, 0, 0.06)' }}
             className="word-token"
             aria-label={`${t.word.simplified}, pinyin ${t.word.pinyin}, ${t.word.english}`}
+            tabIndex={0}
           >
             {t.text}
           </span>
         ) : (
-          <span key={idx}>{t.text}</span>
-        )
-      )}
+          <span key={key}>{t.text}</span>
+        );
+      })}
     </p>
   );
 }
@@ -97,13 +123,13 @@ export default function Articles(): React.ReactElement {
   const [loading, setLoading] = useState<boolean>(true);
   const [data, setData] = useState<Article[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [showPinyin, setShowPinyin] = useState<boolean>(false);
 
   const fetchArticles = async () => {
     setLoading(true);
     setError(null);
 
     try {
-      // Relative path so Vite dev server proxy can forward to the backend.
       const res = await fetch('/api/articles');
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
@@ -133,6 +159,9 @@ export default function Articles(): React.ReactElement {
       <div style={{ marginBottom: 12 }}>
         <button onClick={fetchArticles} disabled={loading}>
           {loading ? 'Refreshing…' : 'Refresh'}
+        </button>{' '}
+        <button onClick={() => setShowPinyin((s) => !s)} aria-pressed={showPinyin}>
+          Toggle Pinyin
         </button>
       </div>
 
@@ -163,7 +192,7 @@ export default function Articles(): React.ReactElement {
                 </div>
               </header>
 
-              <ArticleContent content={article.content} words={article.words} />
+              <ArticleContent content={article.content} words={article.words} showPinyin={showPinyin} />
 
               {article.words && article.words.length > 0 && (
                 <section style={{ marginTop: 12 }}>
