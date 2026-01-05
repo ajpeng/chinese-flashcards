@@ -12,3 +12,25 @@ generator client {
 datasource db {
   provider = "postgresql"
 }
+
+model Article {
+  id        Int      @id @default(autoincrement())
+  title     String
+  content   String
+  hskLevel  Int
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  words     Word[]
+}
+
+model Word {
+  id         Int     @id @default(autoincrement())
+  simplified String
+  pinyin     String
+  english    String
+  hskLevel   Int
+
+  article    Article @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  articleId  Int
+}
