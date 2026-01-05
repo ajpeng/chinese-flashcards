@@ -1,51 +1,104 @@
-# Backend health endpoint
+# Backend (Express + TypeScript + Prisma)
 
-This backend exposes a simple health endpoint at:
+This backend is an Express server written in TypeScript. It exposes health-check endpoints and uses PostgreSQL via Prisma.
 
-- GET /health — returns JSON with status, timestamp, uptime, and env
+## Endpoints
 
-Example response:
+- `GET /` – default Express index view (Jade).
+- `GET /users` – sample users route.
+- `GET /health` – JSON health/readiness info:
 
+  ```json
+  {
+    "status": "ok",
+    "timestamp": "2026-01-02T00:00:00.000Z",
+    "uptime": 123.45,
+    "env": "development"
+  }
+  ```
+
+- `GET /test-db` – simple database connectivity check using the shared Postgres pool.
+
+## Prerequisites
+
+- Node.js and npm
+- PostgreSQL (local or via `docker-compose.yml` in this directory)
+
+If you use the provided `docker-compose.yml`, the default Postgres environment variables are:
+
+- `DB_USER` — database user (matches `POSTGRES_USER`).
+- `DB_PASSWORD` — database password (matches `POSTGRES_PASSWORD`).
+- `DB_NAME` — database name (matches `POSTGRES_DB`).
+
+Example:
+
+```bash
+export DB_USER=myuser
+export DB_PASSWORD=mypassword
+export DB_NAME=mydatabase
 ```
-{
-  "status": "ok",
-  "timestamp": "2026-01-02T00:00:00.000Z",
-  "uptime": 123.45,
-  "env": "development"
-}
-```
 
-How to run locally:
+## Install dependencies
 
-1. From the repository root, start the backend server (ensure dependencies are installed):
+From the repository root:
 
 ```bash
 cd backend
 npm install
+```
+
+## Database setup
+
+Run Prisma migrations and seed initial data (articles and words):
+
+```bash
+cd backend
+npm run prisma:migrate
+npm run prisma:seed    # or: npx prisma db seed
+```
+
+## Running the server
+
+### Development (TypeScript directly)
+
+```bash
+cd backend
+npm run dev
+```
+
+This uses `ts-node-dev` and reloads on changes.
+
+### Production-style (compiled JavaScript)
+
+First build:
+
+```bash
+cd backend
+npm run build   # runs `prisma generate` then `tsc`, outputs to dist/
+```
+
+Then start the compiled server:
+
+```bash
+cd backend
 PORT=3000 npm start
 ```
 
-2. Test the health endpoint:
+## Health and DB checks
 
-```bash
-curl -i http://localhost:3000/health
-```
+- Health endpoint:
 
-Or run the quick one-off check from the repo root (starts app on an ephemeral port, queries /health, prints result):
-
-```bash
-node -e "const app=require('./backend/app'); const s=app.listen(0,()=>{ const port=s.address().port; const http=require('http'); http.get('http://127.0.0.1:'+port+'/health',res=>{let b=''; res.on('data',c=>b+=c); res.on('end',()=>{console.log('STATUS:'+res.statusCode); console.log('BODY:'+b); s.close();})}).on('error',e=>{console.error('ERR',e); s.close()}); })"
-```
-
-Notes:
-- This is a simple readiness endpoint and does not perform deep dependency checks (database, caches). If you need liveness/readiness probes for Kubernetes, consider adding checks for dependent services.
-- The `/test-db` endpoint uses the shared Postgres pool from `db.js`, which expects these environment variables:
-  - `DB_USER` — database user (matches `POSTGRES_USER` in `docker-compose.yml` if you use the provided Postgres container).
-  - `DB_PASSWORD` — database password (matches `POSTGRES_PASSWORD`).
-  - `DB_NAME` — database name (matches `POSTGRES_DB`).
-  For example, when using the default `docker-compose.yml` values:
   ```bash
-  export DB_USER=myuser
-  export DB_PASSWORD=mypassword
-  export DB_NAME=mydatabase
+  curl -i http://localhost:3000/health
   ```
+
+- Database connectivity check (requires `DB_USER`, `DB_PASSWORD`, `DB_NAME` to be set):
+
+  ```bash
+  curl -i http://localhost:3000/test-db
+  ```
+
+## Notes
+
+- The `/health` endpoint is a lightweight readiness check. For production liveness/readiness probes (e.g. Kubernetes), you may want to extend it with deeper dependency checks (database, caches, external services).
+- Prisma client code is generated into `generated/prisma` based on `prisma/schema.prisma` and consumed by the TypeScript seed script in `src/prisma/seed.ts`.
