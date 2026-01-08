@@ -16,8 +16,8 @@ export default function Health(): React.ReactElement {
     setLoading(true)
     setError(null)
     try {
-  // Use a relative path so the Vite dev server proxy can forward to the backend during development.
-  const res = await fetch('/health')
+      const apiUrl = import.meta.env.VITE_API_URL || '';
+      const res = await fetch(`${apiUrl}/health`)
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const json = (await res.json()) as HealthResponse
       setData(json)
@@ -36,7 +36,7 @@ export default function Health(): React.ReactElement {
   return (
     <div style={{ maxWidth: 800 }}>
       <h2>Health Check</h2>
-      <p>This page queries <code>/health</code> on the same origin and displays the result.</p>
+      <p>This page queries <code>/health</code> on the backend and displays the result.</p>
 
       <div style={{ marginBottom: 12 }}>
         <button onClick={fetchHealth} disabled={loading}>

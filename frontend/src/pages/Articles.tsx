@@ -191,12 +191,13 @@ export default function Articles(): React.ReactElement {
   const learnedSet = useMemo(() => new Set(learnedIds), [learnedIds]);
   const markingSet = useMemo(() => new Set(markingIds), [markingIds]);
   const savedSet = useMemo(() => new Set(savedIds), [savedIds]);
+  const API_URL = import.meta.env.VITE_API_URL || '';
 
   // Fetch initial learned IDs from mock endpoint
   useEffect(() => {
     const fetchLearned = async () => {
       try {
-        const res = await fetch('/api/users/mock/flashcards');
+        const res = await fetch(`${API_URL}/api/users/mock/flashcards`);
         if (!res.ok) return;
         const json = await res.json();
         const ids = Array.isArray(json) ? (json as Array<{ wordId?: number }>).map((r) => r.wordId).filter((n): n is number => typeof n === 'number') : [];
@@ -214,7 +215,7 @@ export default function Articles(): React.ReactElement {
     setMarkingIds((s) => [...s, wordId]);
 
     try {
-      const res = await fetch('/api/users/mock/flashcards', {
+      const res = await fetch(`${API_URL}/api/users/mock/flashcards`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ wordId }),
@@ -242,7 +243,7 @@ export default function Articles(): React.ReactElement {
     setMarkingIds((s) => [...s, wordId]);
 
     try {
-      const res = await fetch('/api/users/mock/flashcards', {
+      const res = await fetch(`${API_URL}/api/users/mock/flashcards`, {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ wordId }),
@@ -288,7 +289,7 @@ export default function Articles(): React.ReactElement {
     setError(null);
 
     try {
-      const res = await fetch('/api/articles');
+      const res = await fetch(`${API_URL}/api/articles`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
       const json = (await res.json()) as Article[];
