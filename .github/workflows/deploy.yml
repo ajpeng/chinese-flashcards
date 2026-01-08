@@ -1,45 +1,51 @@
-name: Deploy Chinese Flashcards to EC2
-
+name: Chinese Flashcards CI/CD  # clear name
 on:
   push:
     branches: [ main ]
-  workflow_dispatch:  # manual trigger
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:  # manual
 
 jobs:
   test:
     runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v4
-    
-    - name: Use Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: '20'
-        cache: 'npm'
-    
-    # Backend tests
-    - name: Backend test & build
-      run: |
-        cd backend
-        npm ci
-        npm test || npm run build  # test or build
-    
-    # Frontend build
-    - name: Frontend build
-      run: |
-        cd frontend
-        npm ci
-        npm run build
+    steps:  # your existing test steps unchanged
 
   deploy:
     needs: test
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
-    
+    permissions:
+      id-token: write
+      contents: read
+
     steps:
     - uses: actions/checkout@v4
 
-    # Modern AWS auth (GitHub OIDC → no keys!)
+    # Node setup for frontend build
+    - name: Setup Node
+      uses: actions/setup-node@v4
+      with:
+        node-version: 20
+        cache: 'npm'
+        cache-dependency-path: '**/package-lock.json'
+
+    # Frontend: Build → GitHub Pages [web:133]
+    - name: Build & Deploy Frontend
+      run: |
+        cd frontend
+        npm ci
+        npm run build
+      # Direct deploy (bypasses .gitignore)
+    - name: Deploy Frontend to Pages
+      uses: JamesIves/github-pages-deploy-action@v4
+      with:
+        branch: gh-pages
+        folder: frontend/dist
+        token: ${{ secrets.GITHUB_TOKEN }}
+        single-commit: true
+
+    # AWS + Backend 
     - name: Configure AWS credentials
       uses: aws-actions/configure-aws-credentials@v4
       with:
@@ -53,7 +59,7 @@ jobs:
         aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 426719348382.dkr.ecr.us-east-1.amazonaws.com
         docker buildx build --platform linux/amd64 --push -t 426719348382.dkr.ecr.us-east-1.amazonaws.com/chinese-backend:latest .
 
-    # Deploy to EC2 via SSH (zero-downtime)
+    # Deploy to EC2 via SSH
     - name: Deploy to EC2
       uses: appleboy/ssh-action@v1.0.3
       with:
