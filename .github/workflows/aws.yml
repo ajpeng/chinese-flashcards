@@ -1,0 +1,86 @@
+name: Deploy Chinese Flashcards to EC2
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Setup Node
+      uses: actions/setup-node@v4
+      with:
+        node-version: 20
+        cache: 'npm'
+    
+    - name: Backend test
+      run: |
+        cd backend
+        npm ci
+        npm test
+    
+    - name: Frontend build
+      run: |
+        cd frontend
+        npm ci
+        npm run build
+
+  deploy:
+    needs: test
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write  # OIDC for AWS
+      contents: read
+
+    steps:
+    - uses: actions/checkout@v4
+
+    # AWS login via GitHub OIDC (no IAM keys!)
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        role-to-assume: arn:aws:iam::426719348382:role/GitHubActionsRole  # create this IAM role
+        aws-region: us-east-1
+
+    # Backend: Docker build → ECR → ready for EC2
+    - name: Backend Docker build & push
+      run: |
+        cd backend
+        aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 426719348382.dkr.ecr.us-east-1.amazonaws.com
+        docker buildx build --platform linux/amd64 -t 426719348382.dkr.ecr.us-east-1.amazonaws.com/chinese-backend:latest --push .
+
+    # Frontend: Build → deploy to S3 (or GitHub Pages)
+    - name: Frontend deploy
+      run: |
+        cd frontend
+        npm ci
+        npm run build
+        
+        # Option 1: GitHub Pages (free)
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        git add dist/
+        git commit -m "Deploy frontend $(date)" || echo "No changes"
+        gh-pages -d dist
+
+    # Deploy backend to EC2 via SSH
+    - name: Deploy backend to EC2
+      uses: appleboy/ssh-action@v1.0.3
+      with:
+        host: ${{ secrets.EC2_HOST }}           # 54.123.45.67
+        username: ubuntu
+        key: ${{ secrets.EC2_SSH_KEY }}        # contents of your .pem file
+        script: |
+          docker pull 426719348382.dkr.ecr.us-east-1.amazonaws.com/chinese-backend:latest
+          docker stop chinese-backend || true
+          docker rm chinese-backend || true
+          docker run -d \
+            --name chinese-backend \
+            -p 3001:3001 \
+            426719348382.dkr.ecr.us-east-1.amazonaws.com/chinese-backend:latest
