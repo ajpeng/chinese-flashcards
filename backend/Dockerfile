@@ -5,6 +5,7 @@ WORKDIR /app
 # Copy package files first (for caching), then copy Prisma schema so postinstall can find it
 COPY package*.json ./
 COPY prisma ./prisma
+COPY prisma.config.ts ./
 
 # install dev + prod deps (postinstall will run prisma generate and find the schema)
 RUN npm ci
@@ -20,5 +21,6 @@ WORKDIR /app
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/prisma ./prisma
+COPY --from=builder /app/prisma.config.ts ./
 EXPOSE 3001
 CMD ["node", "dist/bin/www.js"]
