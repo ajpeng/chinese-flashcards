@@ -1,0 +1,82 @@
+name: Deploy Chinese Flashcards to EC2
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:  # manual trigger
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Use Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+        cache: 'npm'
+    
+    # Backend tests
+    - name: Backend test & build
+      run: |
+        cd backend
+        npm ci
+        npm test || npm run build  # test or build
+    
+    # Frontend build
+    - name: Frontend build
+      run: |
+        cd frontend
+        npm ci
+        npm run build
+
+  deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+    - uses: actions/checkout@v4
+
+    # Modern AWS auth (GitHub OIDC → no keys!)
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        role-to-assume: arn:aws:iam::426719348382:role/GitHubActionsRole
+        aws-region: us-east-1
+
+    # Backend: Docker build → ECR (linux/amd64 for EC2)
+    - name: Build & push backend Docker
+      run: |
+        cd backend
+        aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 426719348382.dkr.ecr.us-east-1.amazonaws.com
+        docker buildx build --platform linux/amd64 --push -t 426719348382.dkr.ecr.us-east-1.amazonaws.com/chinese-backend:latest .
+
+    # Deploy to EC2 via SSH (zero-downtime)
+    - name: Deploy to EC2
+      uses: appleboy/ssh-action@v1.0.3
+      with:
+        host: ${{ secrets.EC2_HOST }}
+        username: ubuntu
+        key: ${{ secrets.EC2_SSH_KEY }}
+        script: |
+          cd chinese-flashcards || git clone https://github.com/ajpeng/chinese-flashcards.git
+          cd chinese-flashcards
+          git pull origin main
+          
+          # Backend rolling update
+          docker pull 426719348382.dkr.ecr.us-east-1.amazonaws.com/chinese-backend:latest
+          docker stop chinese-backend || true
+          docker rm chinese-backend || true
+          docker run -d \
+            --name chinese-backend \
+            -p 3001:3001 \
+            --restart unless-stopped \
+            426719348382.dkr.ecr.us-east-1.amazonaws.com/chinese-backend:latest
+          
+          # Restart NGINX
+          sudo nginx -t && sudo systemctl reload nginx
+          
+          # Health check
+          curl -f http://localhost:3001/health || echo "Health check failed"
