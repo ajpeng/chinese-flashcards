@@ -1,0 +1,28 @@
+name: Remote Migration and Seed via SSH
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  deploy-and-seed:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Execute Prisma commands on EC2
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          envs: DATABASE_URL
+          script: |
+            cd ~/chinese-flashcards/backend
+            git pull origin main
+            docker run --rm \
+              -e DATABASE_URL="${{ secrets.DATABASE_URL }}" \
+              your-docker-image-name \
+              sh -c "npx prisma migrate deploy && npx prisma db seed"
