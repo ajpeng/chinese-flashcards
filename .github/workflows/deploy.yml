@@ -36,8 +36,8 @@ jobs:
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
     permissions:
-      id-token: write
-      contents: read
+      contents: write     # gh-pages push
+      id-token: write     # AWS OIDC
 
     steps:
     - uses: actions/checkout@v4
