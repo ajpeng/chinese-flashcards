@@ -8,6 +8,9 @@ on:
 jobs:
   deploy-and-seed:
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write     # Required for AWS OIDC
+      contents: read      # Required for checkout
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -30,10 +33,10 @@ jobs:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
-          envs: DATABASE_URL
           script: |
             cd ~/chinese-flashcards/backend
             git pull origin main
+            docker pull 426719348382.dkr.ecr.us-east-1.amazonaws.com/chinese-backend:latest
             docker run --rm \
               -e DATABASE_URL="${{ secrets.DATABASE_URL }}" \
               426719348382.dkr.ecr.us-east-1.amazonaws.com/chinese-backend:latest \
