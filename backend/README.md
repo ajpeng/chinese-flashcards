@@ -101,4 +101,4 @@ PORT=3000 npm start
 ## Notes
 
 - The `/health` endpoint is a lightweight readiness check. For production liveness/readiness probes (e.g. Kubernetes), you may want to extend it with deeper dependency checks (database, caches, external services).
-- Prisma client code is generated into `generated/prisma` based on `prisma/schema.prisma` and consumed by the TypeScript seed script in `src/prisma/seed.ts`.
+- Prisma client code is generated into `src/generated/prisma` based on `prisma/schema.prisma` and consumed by the TypeScript seed script in `src/prisma/seed.ts`.
