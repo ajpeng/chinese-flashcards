@@ -12,6 +12,18 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::426719348382:role/GitHubActionsRole
+          aws-region: us-east-1
+
+      - name: Build & push backend Docker
+        run: |
+          cd backend
+          aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 426719348382.dkr.ecr.us-east-1.amazonaws.com
+          docker buildx build --platform linux/amd64 --push -t 426719348382.dkr.ecr.us-east-1.amazonaws.com/chinese-backend:latest .
+
       - name: Execute Prisma commands on EC2
         uses: appleboy/ssh-action@v1.0.3
         with:
