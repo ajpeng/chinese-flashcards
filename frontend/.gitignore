@@ -22,3 +22,7 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# vite build output
+/frontend/dist/
+!/frontend/dist/.gitkeep  # optional: track empty dist
