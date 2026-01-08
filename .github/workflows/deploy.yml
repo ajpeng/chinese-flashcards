@@ -75,6 +75,19 @@ jobs:
         aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 426719348382.dkr.ecr.us-east-1.amazonaws.com
         docker buildx build --platform linux/amd64 --push -t 426719348382.dkr.ecr.us-east-1.amazonaws.com/chinese-backend:latest .
 
+    - name: Test EC2 SSH Connection
+      uses: appleboy/ssh-action@v1.0.3
+      with:
+        host: ${{ secrets.EC2_HOST }}
+        username: ubuntu
+        key: ${{ secrets.EC2_SSH_KEY }}
+        script: |
+          echo "SSH working! 🎉"
+          whoami
+          pwd
+          docker --version || echo "Docker missing"
+          curl --version || echo "curl missing"
+
     - name: Deploy to EC2
       uses: appleboy/ssh-action@v1.0.3
       with:
