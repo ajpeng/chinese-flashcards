@@ -106,6 +106,7 @@ jobs:
             --name chinese-backend \
             -p 3001:3001 \
             -e DATABASE_URL="${{ secrets.DATABASE_URL }}" \
+            -e PORT=3001 \
             --restart unless-stopped \
             426719348382.dkr.ecr.us-east-1.amazonaws.com/chinese-backend:latest
           
