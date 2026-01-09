@@ -1,6 +1,8 @@
 import { PrismaClient as PrismaClientCtor } from '../generated/prisma/client';
 import { Pool } from 'pg';
 import { PrismaPg } from '@prisma/adapter-pg';
+import * as fs from 'fs';
+import * as path from 'path';
 
 // Narrow the constructor type so options become optional but keep the actual instance type.
 type PrismaClientInstance = InstanceType<typeof PrismaClientCtor>;
@@ -21,10 +23,12 @@ const poolConfig: any = {
   connectionString: finalConnectionString
 };
 
-// Explicitly set SSL config for RDS
+// Use proper SSL with RDS CA certificate
 if (!isLocalhost) {
+  const caPath = path.join(__dirname, '../../rds-ca-bundle.pem');
   poolConfig.ssl = {
-    rejectUnauthorized: false
+    ca: fs.readFileSync(caPath).toString(),
+    rejectUnauthorized: true
   };
 }
 

@@ -24,5 +24,6 @@ COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/prisma.config.ts ./
+COPY --from=builder /app/rds-ca-bundle.pem ./
 EXPOSE 3001
 CMD ["node", "dist/bin/www.js"]

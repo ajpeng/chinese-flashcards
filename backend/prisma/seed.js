@@ -2,6 +2,8 @@
 // Run with: npx prisma db seed
 
 const { Pool } = require('pg');
+const fs = require('fs');
+const path = require('path');
 
 // Validate DATABASE_URL exists
 if (!process.env.DATABASE_URL) {
@@ -18,10 +20,12 @@ const poolConfig = {
   connectionString
 };
 
-// Explicitly set SSL config for RDS
+// Use proper SSL with RDS CA certificate
 if (!isLocalhost) {
+  const caPath = path.join(__dirname, '../rds-ca-bundle.pem');
   poolConfig.ssl = {
-    rejectUnauthorized: false
+    ca: fs.readFileSync(caPath, 'utf8'),
+    rejectUnauthorized: true
   };
 }
 

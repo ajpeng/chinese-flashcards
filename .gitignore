@@ -62,5 +62,6 @@ Thumbs.db
 
 # Misc
 *.pem
+!backend/rds-ca-bundle.pem
 *.key
 pids/WARP.md
