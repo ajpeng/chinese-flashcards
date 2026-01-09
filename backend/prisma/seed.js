@@ -12,8 +12,15 @@ const prisma = new PrismaClient({ adapter });
 
 async function main() {
   // Optional: clear existing data to avoid duplicates when re-seeding
-  await prisma.word.deleteMany();
-  await prisma.article.deleteMany();
+  try {
+    console.log('Attempting to clear existing data...');
+    await prisma.word.deleteMany();
+    await prisma.article.deleteMany();
+    console.log('Successfully cleared existing data.');
+  } catch (error) {
+    console.log('Could not clear existing data (permissions issue), continuing with seed...');
+    console.log('Error:', error.message);
+  }
 
   const article1 = await prisma.article.create({
     data: {
@@ -135,6 +142,7 @@ async function main() {
   });
 
   console.log('Seeded articles:', { article1Id: article1.id, article2Id: article2.id });
+  console.log('Seed completed successfully!');
 }
 
 main()
