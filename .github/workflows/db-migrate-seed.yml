@@ -33,17 +33,24 @@ jobs:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
-          envs: DATABASE_URL
           script: |
             cd ~/chinese-flashcards/backend
             git pull origin main
+
+            # Login to ECR
+            aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 426719348382.dkr.ecr.us-east-1.amazonaws.com
+
+            # Pull latest image
             docker pull 426719348382.dkr.ecr.us-east-1.amazonaws.com/chinese-backend:latest
+
+            # Set DATABASE_URL from secret (expanded by GitHub Actions before sending)
+            export DATABASE_URL='${{ secrets.DATABASE_URL }}'
+
+            # Run migrations and seed
             docker run --rm \
               -e DATABASE_URL="${DATABASE_URL}" \
               426719348382.dkr.ecr.us-east-1.amazonaws.com/chinese-backend:latest \
               sh -c "npx prisma migrate deploy --schema ./prisma/schema.prisma && npx prisma db seed --schema ./prisma/schema.prisma"
-        env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
 
       - name: Debug database connection
         uses: appleboy/ssh-action@v1.0.3
@@ -51,8 +58,8 @@ jobs:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
-          envs: DATABASE_URL
           script: |
+            export DATABASE_URL='${{ secrets.DATABASE_URL }}'
             docker run --rm \
               -e DATABASE_URL="${DATABASE_URL}" \
               426719348382.dkr.ecr.us-east-1.amazonaws.com/chinese-backend:latest \
@@ -65,5 +72,3 @@ jobs:
                   pool.end();
                 });
               \""
-        env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
