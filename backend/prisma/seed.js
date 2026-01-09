@@ -2,18 +2,13 @@
 // Run with: npx prisma db seed
 
 const { PrismaClient } = require('../dist/generated/prisma/client');
-const { PrismaPg } = require('@prisma/adapter-pg');
-const { Pool } = require('pg');
 
 // Validate DATABASE_URL exists
 if (!process.env.DATABASE_URL) {
   throw new Error('DATABASE_URL environment variable is not set');
 }
 
-const pool = new Pool({ connectionString: process.env.DATABASE_URL });
-const adapter = new PrismaPg(pool);
-
-const prisma = new PrismaClient({ adapter });
+const prisma = new PrismaClient();
 
 async function main() {
   // Check if data already exists to avoid duplicates
