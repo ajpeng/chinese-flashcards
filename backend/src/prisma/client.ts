@@ -11,7 +11,29 @@ if (!connectionString) {
   throw new Error('DATABASE_URL is not set');
 }
 
-const pool = new Pool({ connectionString });
+// Configure SSL for RDS connection
+const isLocalhost = connectionString.includes('localhost');
+
+// Add sslmode=require to connection string (same as what works with psql)
+let finalConnectionString = connectionString;
+if (!isLocalhost) {
+  finalConnectionString = connectionString.includes('?')
+    ? `${connectionString}&sslmode=require`
+    : `${connectionString}?sslmode=require`;
+}
+
+const poolConfig: any = {
+  connectionString: finalConnectionString
+};
+
+// Explicitly set SSL config for RDS
+if (!isLocalhost) {
+  poolConfig.ssl = {
+    rejectUnauthorized: false
+  };
+}
+
+const pool = new Pool(poolConfig);
 const adapter = new PrismaPg(pool);
 
 const prisma: PrismaClientInstance = new PrismaClient({
