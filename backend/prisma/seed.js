@@ -1,152 +1,93 @@
 // Seed script for initial Article and Word data
 // Run with: npx prisma db seed
 
-const { PrismaClient } = require('../dist/generated/prisma/client');
+const { Pool } = require('pg');
 
 // Validate DATABASE_URL exists
 if (!process.env.DATABASE_URL) {
   throw new Error('DATABASE_URL environment variable is not set');
 }
 
-const prisma = new PrismaClient({
-  datasources: {
-    db: {
-      url: process.env.DATABASE_URL,
-    },
-  },
-});
+const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
 async function main() {
-  // Check if data already exists to avoid duplicates
-  const existingArticles = await prisma.article.count();
-  if (existingArticles > 0) {
-    console.log('Data already exists, skipping seed...');
-    return;
+  const client = await pool.connect();
+
+  try {
+    // Check if data already exists to avoid duplicates
+    const { rows } = await client.query('SELECT COUNT(*) as count FROM "Article"');
+    const existingArticles = parseInt(rows[0].count);
+
+    if (existingArticles > 0) {
+      console.log('Data already exists, skipping seed...');
+      return;
+    }
+
+    console.log('No existing data found, proceeding with seed...');
+
+    // Insert Article 1
+    const article1Result = await client.query(`
+      INSERT INTO "Article" (title, "hskLevel", content, "createdAt", "updatedAt")
+      VALUES ($1, $2, $3, NOW(), NOW())
+      RETURNING id
+    `, ['欢迎来到中文学习应用', 1, '你好，欢迎来到中文学习应用。这是一篇简单的 HSK1 文章，让你练习常用词。']);
+
+    const article1Id = article1Result.rows[0].id;
+
+    // Insert words for Article 1
+    await client.query(`
+      INSERT INTO "Word" (simplified, pinyin, english, "hskLevel", "articleId")
+      VALUES
+        ($1, $2, $3, $4, $5),
+        ($6, $7, $8, $9, $10),
+        ($11, $12, $13, $14, $15),
+        ($16, $17, $18, $19, $20),
+        ($21, $22, $23, $24, $25),
+        ($26, $27, $28, $29, $30)
+    `, [
+      '你好', 'nǐ hǎo', 'hello', 1, article1Id,
+      '欢迎', 'huān yíng', 'welcome', 1, article1Id,
+      '来到', 'lái dào', 'to come to / arrive', 2, article1Id,
+      '中文', 'zhōng wén', 'Chinese (language)', 1, article1Id,
+      '学习', 'xué xí', 'to study / to learn', 1, article1Id,
+      '应用', 'yìng yòng', 'application / app', 3, article1Id
+    ]);
+
+    // Insert Article 2
+    const article2Result = await client.query(`
+      INSERT INTO "Article" (title, "hskLevel", content, "createdAt", "updatedAt")
+      VALUES ($1, $2, $3, NOW(), NOW())
+      RETURNING id
+    `, ['在公园练习中文', 2, '今天天气很好，我们一起去公园练习中文。你可以大声读出来，提高发音。']);
+
+    const article2Id = article2Result.rows[0].id;
+
+    // Insert words for Article 2
+    await client.query(`
+      INSERT INTO "Word" (simplified, pinyin, english, "hskLevel", "articleId")
+      VALUES
+        ($1, $2, $3, $4, $5),
+        ($6, $7, $8, $9, $10),
+        ($11, $12, $13, $14, $15),
+        ($16, $17, $18, $19, $20),
+        ($21, $22, $23, $24, $25),
+        ($26, $27, $28, $29, $30),
+        ($31, $32, $33, $34, $35)
+    `, [
+      '今天', 'jīn tiān', 'today', 1, article2Id,
+      '天气', 'tiān qì', 'weather', 1, article2Id,
+      '很好', 'hěn hǎo', 'very good', 1, article2Id,
+      '一起', 'yì qǐ', 'together', 1, article2Id,
+      '公园', 'gōng yuán', 'park', 2, article2Id,
+      '练习', 'liàn xí', 'to practice', 2, article2Id,
+      '发音', 'fā yīn', 'pronunciation', 3, article2Id
+    ]);
+
+    console.log('Seeded articles:', { article1Id, article2Id });
+    console.log('Seed completed successfully!');
+  } finally {
+    client.release();
   }
-
-  console.log('No existing data found, proceeding with seed...');
-
-  const article1 = await prisma.article.create({
-    data: {
-      title: '欢迎来到中文学习应用',
-      hskLevel: 1,
-      content:
-        '你好，欢迎来到中文学习应用。这是一篇简单的 HSK1 文章，让你练习常用词。',
-    },
-  });
-
-  await prisma.word.createMany({
-    data: [
-      {
-        simplified: '你好',
-        pinyin: 'nǐ hǎo',
-        english: 'hello',
-        hskLevel: 1,
-        articleId: article1.id,
-      },
-      {
-        simplified: '欢迎',
-        pinyin: 'huān yíng',
-        english: 'welcome',
-        hskLevel: 1,
-        articleId: article1.id,
-      },
-      {
-        simplified: '来到',
-        pinyin: 'lái dào',
-        english: 'to come to / arrive',
-        hskLevel: 2,
-        articleId: article1.id,
-      },
-      {
-        simplified: '中文',
-        pinyin: 'zhōng wén',
-        english: 'Chinese (language)',
-        hskLevel: 1,
-        articleId: article1.id,
-      },
-      {
-        simplified: '学习',
-        pinyin: 'xué xí',
-        english: 'to study / to learn',
-        hskLevel: 1,
-        articleId: article1.id,
-      },
-      {
-        simplified: '应用',
-        pinyin: 'yìng yòng',
-        english: 'application / app',
-        hskLevel: 3,
-        articleId: article1.id,
-      },
-    ],
-  });
-
-  const article2 = await prisma.article.create({
-    data: {
-      title: '在公园练习中文',
-      hskLevel: 2,
-      content:
-        '今天天气很好，我们一起去公园练习中文。你可以大声读出来，提高发音。',
-    },
-  });
-
-  await prisma.word.createMany({
-    data: [
-      {
-        simplified: '今天',
-        pinyin: 'jīn tiān',
-        english: 'today',
-        hskLevel: 1,
-        articleId: article2.id,
-      },
-      {
-        simplified: '天气',
-        pinyin: 'tiān qì',
-        english: 'weather',
-        hskLevel: 1,
-        articleId: article2.id,
-      },
-      {
-        simplified: '很好',
-        pinyin: 'hěn hǎo',
-        english: 'very good',
-        hskLevel: 1,
-        articleId: article2.id,
-      },
-      {
-        simplified: '一起',
-        pinyin: 'yì qǐ',
-        english: 'together',
-        hskLevel: 1,
-        articleId: article2.id,
-      },
-      {
-        simplified: '公园',
-        pinyin: 'gōng yuán',
-        english: 'park',
-        hskLevel: 2,
-        articleId: article2.id,
-      },
-      {
-        simplified: '练习',
-        pinyin: 'liàn xí',
-        english: 'to practice',
-        hskLevel: 2,
-        articleId: article2.id,
-      },
-      {
-        simplified: '发音',
-        pinyin: 'fā yīn',
-        english: 'pronunciation',
-        hskLevel: 3,
-        articleId: article2.id,
-      },
-    ],
-  });
-
-  console.log('Seeded articles:', { article1Id: article1.id, article2Id: article2.id });
-  console.log('Seed completed successfully!');
 }
 
 main()
@@ -155,5 +96,5 @@ main()
     process.exit(1);
   })
   .finally(async () => {
-    await prisma.$disconnect();
+    await pool.end();
   });
