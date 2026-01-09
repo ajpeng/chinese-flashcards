@@ -8,9 +8,17 @@ if (!process.env.DATABASE_URL) {
   throw new Error('DATABASE_URL environment variable is not set');
 }
 
+// Add SSL parameter to connection string for RDS
+let connectionString = process.env.DATABASE_URL;
+if (!connectionString.includes('localhost')) {
+  connectionString = connectionString.includes('?')
+    ? `${connectionString}&ssl=true`
+    : `${connectionString}?ssl=true`;
+}
+
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: process.env.DATABASE_URL.includes('localhost') ? false : {
+  connectionString,
+  ssl: connectionString.includes('localhost') ? false : {
     rejectUnauthorized: false
   }
 });
