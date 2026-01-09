@@ -13,6 +13,10 @@ RUN npm ci
 # now copy the rest of the source and build
 COPY . .
 RUN npm run build
+
+# IMPORTANT: Regenerate Prisma client after build to ensure it matches the schema
+RUN npx prisma generate
+
 RUN npm prune --production      # remove dev deps, keep generated client in node_modules
 
 # runner
