@@ -14,13 +14,8 @@ if (!connectionString) {
 // Configure SSL for RDS connection
 const isLocalhost = connectionString.includes('localhost');
 
-// Add sslmode=require to connection string (same as what works with psql)
-let finalConnectionString = connectionString;
-if (!isLocalhost) {
-  finalConnectionString = connectionString.includes('?')
-    ? `${connectionString}&sslmode=require`
-    : `${connectionString}?sslmode=require`;
-}
+// Remove any sslmode parameter from connection string to avoid conflicts
+let finalConnectionString = connectionString.replace(/[?&]sslmode=[^&]+/, '');
 
 const poolConfig: any = {
   connectionString: finalConnectionString
