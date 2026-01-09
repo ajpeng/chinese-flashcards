@@ -8,14 +8,9 @@ if (!process.env.DATABASE_URL) {
   throw new Error('DATABASE_URL environment variable is not set');
 }
 
-// Parse the DATABASE_URL and add SSL requirement
-const connectionString = process.env.DATABASE_URL.includes('?')
-  ? `${process.env.DATABASE_URL}&sslmode=require`
-  : `${process.env.DATABASE_URL}?sslmode=require`;
-
 const pool = new Pool({
-  connectionString,
-  ssl: {
+  connectionString: process.env.DATABASE_URL,
+  ssl: process.env.DATABASE_URL.includes('localhost') ? false : {
     rejectUnauthorized: false
   }
 });
