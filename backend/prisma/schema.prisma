@@ -15,6 +15,8 @@ model Article {
   title     String
   hskLevel  Int
   content   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
   words     Word[]
 }
 

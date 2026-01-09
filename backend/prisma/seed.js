@@ -3,21 +3,22 @@
 
 const { PrismaClient } = require('../dist/generated/prisma/client');
 const { PrismaPg } = require('@prisma/adapter-pg');
-const adapter = new PrismaPg(process.env.DATABASE_URL);
+const { Pool } = require('pg');
+
+const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+const adapter = new PrismaPg(pool);
 
 const prisma = new PrismaClient({ adapter });
 
 async function main() {
-  // Optional: clear existing data to avoid duplicates when re-seeding
-  try {
-    console.log('Attempting to clear existing data...');
-    await prisma.word.deleteMany();
-    await prisma.article.deleteMany();
-    console.log('Successfully cleared existing data.');
-  } catch (error) {
-    console.log('Could not clear existing data (permissions issue), continuing with seed...');
-    console.log('Error:', error.message);
+  // Check if data already exists to avoid duplicates
+  const existingArticles = await prisma.article.count();
+  if (existingArticles > 0) {
+    console.log('Data already exists, skipping seed...');
+    return;
   }
+
+  console.log('No existing data found, proceeding with seed...');
 
   const article1 = await prisma.article.create({
     data: {
