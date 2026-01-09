@@ -8,20 +8,29 @@ if (!process.env.DATABASE_URL) {
   throw new Error('DATABASE_URL environment variable is not set');
 }
 
-// Add SSL parameter to connection string for RDS
+// Configure SSL for RDS connection
+const isLocalhost = process.env.DATABASE_URL.includes('localhost');
+
+// Add sslmode=require to connection string (same as what works with psql)
 let connectionString = process.env.DATABASE_URL;
-if (!connectionString.includes('localhost')) {
+if (!isLocalhost) {
   connectionString = connectionString.includes('?')
-    ? `${connectionString}&ssl=true`
-    : `${connectionString}?ssl=true`;
+    ? `${connectionString}&sslmode=require`
+    : `${connectionString}?sslmode=require`;
 }
 
-const pool = new Pool({
-  connectionString,
-  ssl: connectionString.includes('localhost') ? false : {
+const poolConfig = {
+  connectionString
+};
+
+// Explicitly set SSL config for RDS
+if (!isLocalhost) {
+  poolConfig.ssl = {
     rejectUnauthorized: false
-  }
-});
+  };
+}
+
+const pool = new Pool(poolConfig);
 
 async function main() {
   const client = await pool.connect();
