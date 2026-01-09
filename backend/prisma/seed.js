@@ -11,13 +11,8 @@ if (!process.env.DATABASE_URL) {
 // Configure SSL for RDS connection
 const isLocalhost = process.env.DATABASE_URL.includes('localhost');
 
-// Add sslmode=require to connection string (same as what works with psql)
-let connectionString = process.env.DATABASE_URL;
-if (!isLocalhost) {
-  connectionString = connectionString.includes('?')
-    ? `${connectionString}&sslmode=require`
-    : `${connectionString}?sslmode=require`;
-}
+// Remove any sslmode parameter from connection string to avoid conflicts
+let connectionString = process.env.DATABASE_URL.replace(/[?&]sslmode=[^&]+/, '');
 
 const poolConfig = {
   connectionString
