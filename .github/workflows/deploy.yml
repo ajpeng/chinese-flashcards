@@ -98,7 +98,25 @@ jobs:
           cd chinese-flashcards || git clone https://github.com/ajpeng/chinese-flashcards.git
           cd chinese-flashcards
           git pull origin main
-          
+
+          # Configure nginx
+          sudo cp nginx/api.ajpeng.ca /etc/nginx/sites-available/
+          sudo ln -sf /etc/nginx/sites-available/api.ajpeng.ca /etc/nginx/sites-enabled/
+
+          # Install certbot if not already installed
+          if ! command -v certbot &> /dev/null; then
+            sudo apt update
+            sudo apt install -y certbot python3-certbot-nginx
+          fi
+
+          # Get/renew SSL certificate (non-interactive)
+          sudo certbot --nginx -d api.ajpeng.ca --non-interactive --agree-tos --email ${{ secrets.CERTBOT_EMAIL }} --redirect || echo "Certbot failed, continuing with HTTP"
+
+          # Start/reload nginx
+          sudo systemctl enable nginx
+          sudo systemctl start nginx || sudo systemctl reload nginx
+
+          # Deploy backend container
           docker pull 426719348382.dkr.ecr.us-east-1.amazonaws.com/chinese-backend:latest
           docker stop chinese-backend || true
           docker rm chinese-backend || true
@@ -109,6 +127,5 @@ jobs:
             -e PORT=3001 \
             --restart unless-stopped \
             426719348382.dkr.ecr.us-east-1.amazonaws.com/chinese-backend:latest
-          
-          sudo nginx -t && sudo systemctl reload nginx
+
           curl -f http://localhost:3001/health || echo "Health check failed"
