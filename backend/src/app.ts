@@ -12,6 +12,8 @@ import articlesRouter from './routes/articles';
 import segmentationRouter from './routes/segmentation';
 import authRouter from './routes/auth';
 import flashcardsRouter from './routes/flashcards';
+import ttsRouter from './routes/tts';
+import sttRouter from './routes/stt';
 import pool from './db';
 import { dictionaryService } from './services/dictionary.service';
 import { segmentationService } from './services/segmentation.service';
@@ -64,6 +66,8 @@ app.use('/api/auth', authRouter);
 app.use('/api/flashcards', flashcardsRouter);
 app.use('/api/articles', articlesRouter);
 app.use('/api/segmentation', segmentationRouter);
+app.use('/api/tts', ttsRouter);
+app.use('/api/stt', sttRouter);
 
 // catch 404 and forward to error handler
 app.use((req: Request, res: Response, next: NextFunction) => {

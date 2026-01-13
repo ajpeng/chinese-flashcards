@@ -11,6 +11,7 @@ interface User {
   fontSize?: 'small' | 'medium' | 'large' | 'xlarge';
   speechRate?: number;
   voiceName?: string;
+  textVariant?: 'simplified' | 'traditional';
   createdAt: string;
 }
 

@@ -20,6 +20,7 @@ model User {
   fontSize      String      @default("medium") // "small" | "medium" | "large" | "xlarge"
   speechRate    Float       @default(0.8)
   voiceName     String?     // Name of preferred TTS voice
+  textVariant   String      @default("simplified") // "simplified" | "traditional"
   createdAt     DateTime    @default(now())
   updatedAt     DateTime    @updatedAt
 
@@ -69,4 +70,23 @@ model Flashcard {
 
   @@unique([userId, wordId])
   @@index([userId])
+}
+
+model TTSCache {
+  id            String   @id @default(cuid())
+  textHash      String   @unique // SHA-256 hash of text+voice+rate combination
+  text          String   // Original text
+  voice         String   // Voice name (e.g., "zh-CN-XiaoxiaoNeural")
+  rate          String   // Speech rate (e.g., "1.0")
+  audioData     String   // Base64 encoded audio
+  timings       Json     // Word timings array
+  totalDuration Float    // Total audio duration
+  segments      Json     // Text segments
+  mappings      Json     // TTS mappings
+  createdAt     DateTime @default(now())
+  lastUsedAt    DateTime @default(now())
+
+  @@index([textHash])
+  @@index([createdAt])
+  @@index([lastUsedAt])
 }

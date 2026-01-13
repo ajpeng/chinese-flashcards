@@ -57,6 +57,20 @@ function NavBar() {
         >
           Articles
         </Link>
+        <Link
+          to="/speech-practice"
+          style={{
+            backgroundColor: isActive('/speech-practice') ? 'rgba(139, 69, 19, 0.5)' : 'transparent',
+            border: '1px solid rgba(255, 255, 255, 0.2)',
+            padding: '8px 16px',
+            borderRadius: '6px',
+            cursor: 'pointer',
+            textDecoration: 'none',
+            color: 'inherit'
+          }}
+        >
+          🎤 Speech Practice
+        </Link>
         {user && (
           <Link
             to="/new"

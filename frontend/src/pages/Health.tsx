@@ -34,10 +34,8 @@ export default function Health(): React.ReactElement {
   }, [])
 
   return (
-    <div style={{ maxWidth: 800 }}>
+    <div>
       <h2>Health Check</h2>
-      <p>This page queries <code>/health</code> on the backend and displays the result.</p>
-
       <div style={{ marginBottom: 12 }}>
         <button onClick={fetchHealth} disabled={loading}>
           {loading ? 'Refreshing...' : 'Refresh'}

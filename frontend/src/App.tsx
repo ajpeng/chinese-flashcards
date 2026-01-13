@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Link, useNavigate } from 'react-router-do
 import Health from './pages/Health'
 import Articles from './pages/Articles'
 import SegmentArticle from './pages/SegmentArticle'
+import SpeechPractice from './pages/SpeechPractice'
 import Login from './pages/Login'
 import Signup from './pages/Signup'
 import Settings from './pages/Settings'
@@ -37,6 +38,22 @@ function Home() {
           Browse Articles
         </Link>
         <Link
+          to="/speech-practice"
+          style={{
+            padding: '12px 24px',
+            fontSize: '16px',
+            backgroundColor: 'rgba(139, 69, 19, 0.8)',
+            border: 'none',
+            borderRadius: '8px',
+            cursor: 'pointer',
+            fontWeight: 600,
+            textDecoration: 'none',
+            color: 'inherit'
+          }}
+        >
+          🎤 Speech Practice
+        </Link>
+        <Link
           to="/new"
           style={{
             padding: '12px 24px',
@@ -68,6 +85,7 @@ function Layout() {
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/articles" element={<Articles />} />
+          <Route path="/speech-practice" element={<SpeechPractice />} />
           <Route path="/new" element={
             <ProtectedRoute>
               <SegmentArticle onNavigateBack={() => navigate('/articles')} />

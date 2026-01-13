@@ -14,6 +14,7 @@ export default function Settings(): React.ReactElement {
   const [speechRate, setSpeechRate] = useState<number>(0.8);
   const [selectedVoice, setSelectedVoice] = useState<string>('');
   const [availableVoices, setAvailableVoices] = useState<SpeechSynthesisVoice[]>([]);
+  const [textVariant, setTextVariant] = useState<'simplified' | 'traditional'>('simplified');
   const [name, setName] = useState('');
 
   const API_URL = import.meta.env.VITE_API_URL || '';
@@ -29,6 +30,7 @@ export default function Settings(): React.ReactElement {
     setFontSize(user.fontSize || 'medium');
     setSpeechRate(user.speechRate || 0.8);
     setSelectedVoice(user.voiceName || '');
+    setTextVariant(user.textVariant || 'simplified');
     setName(user.name || '');
   }, [user, navigate]);
 
@@ -80,6 +82,7 @@ export default function Settings(): React.ReactElement {
           fontSize,
           speechRate,
           voiceName: selectedVoice || null,
+          textVariant,
           name: name.trim() || null,
         }),
       });
@@ -214,6 +217,67 @@ export default function Settings(): React.ReactElement {
                 <div style={{ fontWeight: 500 }}>Tone Numbers</div>
                 <div style={{ fontSize: '0.85em', color: 'var(--muted-color)' }}>
                   Example: ni3 hao3
+                </div>
+              </div>
+            </label>
+          </div>
+        </div>
+
+        <div style={{ marginBottom: 24 }}>
+          <label style={{ display: 'block', marginBottom: 8, fontWeight: 500 }}>
+            Chinese Text Variant
+          </label>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <label
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                padding: '8px 12px',
+                borderRadius: 6,
+                border: '1px solid var(--border-color)',
+                background: textVariant === 'simplified' ? 'rgba(100, 108, 255, 0.1)' : 'transparent',
+                cursor: 'pointer',
+              }}
+            >
+              <input
+                type="radio"
+                name="textVariant"
+                value="simplified"
+                checked={textVariant === 'simplified'}
+                onChange={() => setTextVariant('simplified')}
+                style={{ marginRight: 8 }}
+              />
+              <div>
+                <div style={{ fontWeight: 500 }}>Simplified Chinese (简体)</div>
+                <div style={{ fontSize: '0.85em', color: 'var(--muted-color)' }}>
+                  Example: 中国，汉语，简单
+                </div>
+              </div>
+            </label>
+
+            <label
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                padding: '8px 12px',
+                borderRadius: 6,
+                border: '1px solid var(--border-color)',
+                background: textVariant === 'traditional' ? 'rgba(100, 108, 255, 0.1)' : 'transparent',
+                cursor: 'pointer',
+              }}
+            >
+              <input
+                type="radio"
+                name="textVariant"
+                value="traditional"
+                checked={textVariant === 'traditional'}
+                onChange={() => setTextVariant('traditional')}
+                style={{ marginRight: 8 }}
+              />
+              <div>
+                <div style={{ fontWeight: 500 }}>Traditional Chinese (繁體)</div>
+                <div style={{ fontSize: '0.85em', color: 'var(--muted-color)' }}>
+                  Example: 中國，漢語，繁體
                 </div>
               </div>
             </label>

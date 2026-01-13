@@ -181,6 +181,7 @@ router.get('/me', requireAuth, async (req: Request, res: Response) => {
         fontSize: true,
         speechRate: true,
         voiceName: true,
+        textVariant: true,
         createdAt: true,
       },
     });
@@ -229,6 +230,7 @@ router.patch(
     body('fontSize').optional().isIn(['small', 'medium', 'large', 'xlarge']).withMessage('fontSize must be "small", "medium", "large", or "xlarge"'),
     body('speechRate').optional().isFloat({ min: 0.5, max: 2.0 }).toFloat().withMessage('Invalid speech rate value'),
     body('voiceName').optional({ nullable: true }).isString().trim(),
+    body('textVariant').optional().isIn(['simplified', 'traditional']).withMessage('textVariant must be "simplified" or "traditional"'),
     body('name').optional({ nullable: true }).isString().trim(),
   ],
   async (req: Request, res: Response) => {
@@ -244,7 +246,7 @@ router.patch(
         return;
       }
 
-      const updates: { pinyinStyle?: string; fontSize?: string; name?: string, speechRate?: number, voiceName?: string } = {};
+      const updates: { pinyinStyle?: string; fontSize?: string; name?: string, speechRate?: number, voiceName?: string, textVariant?: string } = {};
       if (req.body.pinyinStyle !== undefined) {
         updates.pinyinStyle = req.body.pinyinStyle;
       }
@@ -256,6 +258,9 @@ router.patch(
       }
       if (req.body.voiceName !== undefined) {
         updates.voiceName = req.body.voiceName;
+      }
+      if (req.body.textVariant !== undefined) {
+        updates.textVariant = req.body.textVariant;
       }
       if (req.body.name !== undefined) {
         updates.name = req.body.name;
@@ -272,6 +277,7 @@ router.patch(
           fontSize: true,
           speechRate: true,
           voiceName: true,
+          textVariant: true,
           createdAt: true,
         },
       });
