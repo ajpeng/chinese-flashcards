@@ -1,0 +1,72 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id            String      @id @default(cuid())
+  email         String      @unique
+  passwordHash  String
+  name          String?
+  emailVerified DateTime?
+  pinyinStyle   String      @default("marks") // "marks" or "numbers"
+  fontSize      String      @default("medium") // "small" | "medium" | "large" | "xlarge"
+  speechRate    Float       @default(0.8)
+  voiceName     String?     // Name of preferred TTS voice
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  flashcards    Flashcard[]
+  articles      Article[]
+
+  @@index([email])
+}
+
+model Article {
+  id        Int      @id @default(autoincrement())
+  title     String
+  hskLevel  Int?
+  content   String
+  userId    String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  words     Word[]
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+}
+
+model Word {
+  id         Int         @id @default(autoincrement())
+  simplified String
+  pinyin     String?
+  english    String?
+  hskLevel   Int?
+  articleId  Int
+  source     String?     @default("dictionary") // "dictionary" | "ai" | "manual"
+  isVerified Boolean     @default(false)        // has this been manually verified?
+
+  article    Article     @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  flashcards Flashcard[]
+}
+
+model Flashcard {
+  id        String   @id @default(cuid())
+  userId    String
+  wordId    Int
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  word      Word     @relation(fields: [wordId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, wordId])
+  @@index([userId])
+}

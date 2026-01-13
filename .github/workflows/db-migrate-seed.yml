@@ -1,0 +1,74 @@
+name: Remote Migration and Seed via SSH
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  deploy-and-seed:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write     # Required for AWS OIDC
+      contents: read      # Required for checkout
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::426719348382:role/GitHubActionsRole
+          aws-region: us-east-1
+
+      - name: Build & push backend Docker
+        run: |
+          cd backend
+          aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 426719348382.dkr.ecr.us-east-1.amazonaws.com
+          docker buildx build --platform linux/amd64 --push -t 426719348382.dkr.ecr.us-east-1.amazonaws.com/chinese-backend:latest .
+
+      - name: Execute Prisma commands on EC2
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            cd ~/chinese-flashcards/backend
+            git pull origin main
+
+            # Login to ECR
+            aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 426719348382.dkr.ecr.us-east-1.amazonaws.com
+
+            # Pull latest image
+            docker pull 426719348382.dkr.ecr.us-east-1.amazonaws.com/chinese-backend:latest
+
+            # Set DATABASE_URL from secret (expanded by GitHub Actions before sending)
+            export DATABASE_URL='${{ secrets.DATABASE_URL }}'
+
+            # Run migrations and seed
+            docker run --rm \
+              -e DATABASE_URL="${DATABASE_URL}" \
+              426719348382.dkr.ecr.us-east-1.amazonaws.com/chinese-backend:latest \
+              sh -c "npx prisma migrate deploy --schema ./prisma/schema.prisma && npx prisma db seed --schema ./prisma/schema.prisma"
+
+      - name: Debug database connection
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            export DATABASE_URL='${{ secrets.DATABASE_URL }}'
+            docker run --rm \
+              -e DATABASE_URL="${DATABASE_URL}" \
+              426719348382.dkr.ecr.us-east-1.amazonaws.com/chinese-backend:latest \
+              sh -c "node -e \"
+                const { Pool } = require('pg');
+                const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+                pool.query('SELECT current_user, current_database()', (err, res) => {
+                  if (err) console.error('Error:', err);
+                  else console.log('Connected as:', res.rows[0]);
+                  pool.end();
+                });
+              \""

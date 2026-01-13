@@ -1,0 +1,252 @@
+#root {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 2rem;
+  text-align: center;
+}
+
+.logo {
+  height: 6em;
+  padding: 1.5em;
+  will-change: filter;
+  transition: filter 300ms;
+}
+.logo:hover {
+  filter: drop-shadow(0 0 2em #646cffaa);
+}
+.logo.react:hover {
+  filter: drop-shadow(0 0 2em #61dafbaa);
+}
+
+@keyframes logo-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  a:nth-of-type(2) .logo {
+    animation: logo-spin infinite 20s linear;
+  }
+}
+
+.card {
+  padding: 2em;
+}
+
+.read-the-docs {
+  color: #888;
+}
+
+.word-token {
+  cursor: help;
+  transition: background 120ms;
+  position: relative;
+  display: inline-block;
+}
+
+.word-token:hover {
+  background: rgba(255, 230, 100, 0.25);
+}
+
+.word-token::after {
+  /* removed: tooltip is now a DOM node (.token-popup) for accessibility and to contain interactive actions */
+  content: none;
+}
+
+.word-token::before {
+  content: none;
+}
+
+/* keep legacy pseudo-element rules disabled (replaced by .token-popup) */
+/* Show pinyin above the word when explicit pinyin is enabled via DOM (ruby)
+   and style the small rt text */
+.word-token ruby {
+  /* Prefer the native ruby positioning, and as a robust fallback use a
+     column-reverse inline-flex so the <rt> appears above the base text. */
+  ruby-position: over;
+  display: inline-flex;
+  flex-direction: column-reverse;
+  align-items: center;
+  line-height: 1;
+  gap: 0.06rem; /* tighten the gap so pinyin sits close to the char */
+  font-size: 1.04em; /* make the Chinese base slightly larger than surrounding text */
+}
+
+.word-token ruby rt {
+  font-size: 0.58em; /* smaller pinyin so it visually sits above cleanly */
+  color: var(--pinyin-color);
+  line-height: 1;
+  display: block;
+  transform: translateY(-0.02em); /* nudge pinyin slightly closer */
+  font-weight: 500;
+}
+
+/* TOKEN POPUP (pinyin + actions) */
+.token-popup {
+  position: absolute;
+  bottom: 135%;
+  left: 50%;
+  transform: translateX(-50%) translateY(6px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--popup-bg);
+  color: var(--popup-text);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+  min-width: 120px;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  z-index: 50;
+  transition: opacity 120ms ease, transform 120ms ease, visibility 120ms ease;
+}
+
+.word-token:hover .token-popup,
+.word-token:focus .token-popup,
+.word-token:focus-within .token-popup {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transform: translateX(-50%) translateY(0);
+}
+
+.token-popup .popup-pinyin {
+  font-weight: 700;
+  font-size: 0.92em;
+}
+
+.token-popup .popup-english {
+  font-size: 0.82em;
+  color: var(--popup-muted);
+}
+
+.token-popup .popup-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-top: 4px;
+}
+
+.token-popup::after {
+  /* small arrow */
+  content: '';
+  position: absolute;
+  bottom: -8px;
+  left: 50%;
+  transform: translateX(-50%);
+  border-width: 8px 8px 0 8px;
+  border-style: solid;
+  border-color: var(--popup-bg) transparent transparent transparent;
+  filter: drop-shadow(0 -2px 4px rgba(0,0,0,0.06));
+}
+
+/* Keyboard focus should also reveal tooltip (for accessibility) */
+.word-token:focus::after,
+.word-token:focus::before {
+  opacity: 1;
+}
+
+.word-token:focus {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(100,149,255,0.18);
+}
+
+/* Speak button inside popup */
+.token-popup .speak-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 28px;
+  min-width: 36px;
+  padding: 4px 8px;
+  font-size: 16px;
+  background: var(--popup-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  line-height: 1;
+  cursor: pointer;
+  transition: transform 140ms ease, opacity 120ms ease;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+  z-index: 55;
+}
+
+.token-popup .speak-btn:hover {
+  transform: translateY(-2px) scale(1.08);
+}
+
+/* Save button inside popup (inline, part of the popup UI) */
+.token-popup .save-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 28px;
+  min-width: 36px;
+  padding: 4px 8px;
+  font-size: 14px;
+  color: #ffb400; /* star color */
+  background: var(--popup-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  line-height: 1;
+  cursor: pointer;
+  transition: transform 140ms ease, opacity 120ms ease;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+  z-index: 55;
+}
+
+.token-popup .save-btn:hover {
+  transform: translateY(-2px) scale(1.04);
+}
+
+.token-popup .save-btn[disabled] {
+  opacity: 0.6;
+  cursor: default;
+}
+
+/* ensure pinyin rt layer sits beneath popup */
+.word-token ruby rt {
+  position: relative;
+  z-index: 30;
+}
+
+/* Saved confirmation as an inline badge inside the popup */
+.token-popup .saved-confirm {
+  background: #2d8f2d;
+  color: #fff;
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-weight: 600;
+  font-size: 0.82em;
+  white-space: nowrap;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+}
+
+/* Toggle button styling for cleaner single control */
+.learn-toggle {
+  padding: 4px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--border-color);
+  background: var(--button-bg);
+  color: var(--button-text);
+  cursor: pointer;
+  font-size: 0.85em;
+}
+
+.learn-toggle[aria-pressed="true"] {
+  background: rgba(45, 185, 45, 0.15);
+  border-color: rgba(45, 185, 45, 0.4);
+  color: rgb(45, 185, 45);
+  font-weight: 600;
+}
+
+.learn-toggle[disabled] {
+  opacity: 0.5;
+  cursor: default;
+}

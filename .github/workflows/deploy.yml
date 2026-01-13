@@ -1,0 +1,143 @@
+name: Chinese Flashcards CI/CD
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Setup Node
+      uses: actions/setup-node@v4
+      with:
+        node-version: 20
+        cache: 'npm'
+    
+    - name: Backend test
+      run: |
+        cd backend
+        npm ci
+        npm test
+      env:
+        JWT_SECRET: test-secret-for-ci-only
+    
+    - name: Frontend build test
+      run: |
+        cd frontend
+        npm ci
+        npm run build
+
+  deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    permissions:
+      contents: write     # gh-pages push
+      id-token: write     # AWS OIDC
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Setup Node
+      uses: actions/setup-node@v4
+      with:
+        node-version: 20
+        cache: 'npm'
+        cache-dependency-path: '**/package-lock.json'
+
+    - name: Frontend build
+      run: |
+        cd frontend
+        npm ci
+        VITE_API_URL=${{ secrets.VITE_API_URL }} npm run build
+
+    - name: Deploy Frontend to GitHub Pages
+      uses: JamesIves/github-pages-deploy-action@v4
+      with:
+        branch: gh-pages
+        folder: frontend/dist
+        token: ${{ secrets.GITHUB_TOKEN }}
+        single-commit: true
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        role-to-assume: arn:aws:iam::426719348382:role/GitHubActionsRole
+        aws-region: us-east-1
+
+    - name: Build & push backend Docker
+      run: |
+        cd backend
+        aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 426719348382.dkr.ecr.us-east-1.amazonaws.com
+        docker buildx build --platform linux/amd64 --push -t 426719348382.dkr.ecr.us-east-1.amazonaws.com/chinese-backend:latest .
+
+    - name: Test EC2 SSH Connection
+      uses: appleboy/ssh-action@v1.0.3
+      with:
+        host: ${{ secrets.EC2_HOST }}
+        username: ubuntu
+        key: ${{ secrets.EC2_SSH_KEY }}
+        script: |
+          echo "SSH working! 🎉"
+          whoami
+          pwd
+          docker --version || echo "Docker missing"
+          curl --version || echo "curl missing"
+
+    - name: Deploy to EC2
+      uses: appleboy/ssh-action@v1.0.3
+      with:
+        host: ${{ secrets.EC2_HOST }}
+        username: ubuntu
+        key: ${{ secrets.EC2_SSH_KEY }}
+        script: |
+          cd chinese-flashcards || git clone https://github.com/ajpeng/chinese-flashcards.git
+          cd chinese-flashcards
+          git fetch origin
+          git reset --hard origin/main
+
+          # Configure nginx
+          sudo cp nginx/api.ajpeng.ca /etc/nginx/sites-available/
+          sudo ln -sf /etc/nginx/sites-available/api.ajpeng.ca /etc/nginx/sites-enabled/
+
+          # Install certbot if not already installed
+          if ! command -v certbot &> /dev/null; then
+            sudo apt update
+            sudo apt install -y certbot python3-certbot-nginx
+          fi
+
+          # Get/renew SSL certificate (non-interactive)
+          sudo certbot --nginx -d api.ajpeng.ca --non-interactive --agree-tos --email ${{ secrets.CERTBOT_EMAIL }} --redirect || echo "Certbot failed, continuing with HTTP"
+
+          # Start/reload nginx
+          sudo systemctl enable nginx
+          sudo systemctl start nginx || sudo systemctl reload nginx
+
+          # Deploy backend container
+          docker pull 426719348382.dkr.ecr.us-east-1.amazonaws.com/chinese-backend:latest
+          docker stop chinese-backend || true
+          docker rm chinese-backend || true
+          docker run -d \
+            --name chinese-backend \
+            -p 3001:3001 \
+            -e DATABASE_URL="${{ secrets.DATABASE_URL }}" \
+            -e JWT_SECRET="${{ secrets.JWT_SECRET }}" \
+            -e FRONTEND_URL="${{ secrets.FRONTEND_URL }}" \
+            -e NODE_ENV=production \
+            -e PORT=3001 \
+            --restart unless-stopped \
+            426719348382.dkr.ecr.us-east-1.amazonaws.com/chinese-backend:latest
+
+          # Wait for backend to be ready
+          sleep 5
+          curl -f http://localhost:3001/health || echo "Health check failed"
+
+          # Run word regeneration script (one-time migration)
+          echo "Regenerating article words with updated filtering logic..."
+          docker exec chinese-backend npm run regenerate-words || echo "Word regeneration skipped or failed"

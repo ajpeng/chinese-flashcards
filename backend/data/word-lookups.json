@@ -1,0 +1,42 @@
+[
+  {
+    "id": 150,
+    "simplified": "两个",
+    "currentPinyin": null,
+    "currentEnglish": null,
+    "aiPinyin": "liǎng gè",
+    "aiEnglish": "two; two (units/pieces)"
+  },
+  {
+    "id": 157,
+    "simplified": "吹倒",
+    "currentPinyin": null,
+    "currentEnglish": null,
+    "aiPinyin": "chuī dǎo",
+    "aiEnglish": "to blow down/over"
+  },
+  {
+    "id": 167,
+    "simplified": "家中",
+    "currentPinyin": null,
+    "currentEnglish": null,
+    "aiPinyin": "jiā zhōng",
+    "aiEnglish": "at home, in the family, within the household"
+  },
+  {
+    "id": 179,
+    "simplified": "电力供应",
+    "currentPinyin": null,
+    "currentEnglish": null,
+    "aiPinyin": "diàn lì gōng yìng",
+    "aiEnglish": "electric power supply"
+  },
+  {
+    "id": 182,
+    "simplified": "该州",
+    "currentPinyin": null,
+    "currentEnglish": null,
+    "aiPinyin": "gāi zhōu",
+    "aiEnglish": "that state/province"
+  }
+]
