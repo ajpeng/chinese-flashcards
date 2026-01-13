@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo, useRef, useCallback } from 'react';
+import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { convertPinyinStyle } from '../utils/pinyin';
@@ -76,8 +76,11 @@ function tokenize(content: string, words: Word[]): Token[] {
   return tokens;
 }
 
-function ArticleContent({ content, words, showPinyin = false, onToggle, markingSet, savedSet, learnedSet, pinyinStyle = 'marks', fontSize = 'medium', highlightedTokenIndex = -1, selectedVoice = '', speechRate = 0.8, onStartReadingFromToken, segments = [], activeWordIndex = -1, textVariant = 'simplified' }: { content: string; words: Word[]; showPinyin?: boolean; onToggle?: (wordId: number) => Promise<boolean>; markingSet?: Set<number>; savedSet?: Set<number>; learnedSet?: Set<number>; pinyinStyle?: 'marks' | 'numbers'; fontSize?: 'small' | 'medium' | 'large' | 'xlarge'; highlightedTokenIndex?: number; selectedVoice?: string; speechRate?: number; onStartReadingFromToken?: (tokenIndex: number) => void; segments?: Array<{ text: string; start: number; end: number; index: number }>; activeWordIndex?: number; textVariant?: 'simplified' | 'traditional' }) {
-  const tokens = useMemo(() => tokenize(content, words), [content, words]);
+function ArticleContent({ content, words, showPinyin = false, onToggle, markingSet, savedSet, learnedSet, pinyinStyle = 'marks', fontSize = 'medium', highlightedTokenIndex = -1, selectedVoice = '', speechRate = 0.8, onStartReadingFromToken, textVariant = 'simplified', backendTokens = [], wordTimings = [] }: { content: string; words: Word[]; showPinyin?: boolean; onToggle?: (wordId: number) => Promise<boolean>; markingSet?: Set<number>; savedSet?: Set<number>; learnedSet?: Set<number>; pinyinStyle?: 'marks' | 'numbers'; fontSize?: 'small' | 'medium' | 'large' | 'xlarge'; highlightedTokenIndex?: number; selectedVoice?: string; speechRate?: number; onStartReadingFromToken?: (tokenIndex: number) => void; textVariant?: 'simplified' | 'traditional'; backendTokens?: Array<{ text: string; word?: Word; index: number }>; wordTimings?: Array<{ word: string; start: number; duration: number; audioOffset: number }> }) {
+  // Use backend tokens if available, otherwise fall back to frontend tokenization
+  const tokens = useMemo(() => {
+    return backendTokens.length > 0 ? backendTokens : tokenize(content, words);
+  }, [backendTokens, content, words]);
 
   const speak = async (text: string) => {
     try {
@@ -119,15 +122,97 @@ function ArticleContent({ content, words, showPinyin = false, onToggle, markingS
     }
   };
 
+  // Use wordTimings as primary source if available, otherwise fall back to tokens
+  const renderItems = wordTimings.length > 0 ? wordTimings : tokens.map((t, idx) => ({ word: t.text, timingIndex: idx, tokenData: t }));
+
   return (
     <div style={{ lineHeight: 1.6, fontSize: getFontSizeValue(fontSize), textAlign: 'left' }}>
-      {tokens.map((t, idx) => {
+      {renderItems.map((item, idx) => {
+        // For timing-based rendering
+        if ('word' in item && 'start' in item) {
+          const timing = item;
+          const wordText = timing.word;
+          const isHighlighted = idx === highlightedTokenIndex;
+          
+          // Try to find word data from the original tokens/words array for definitions
+          const matchingWord = words.find(w => w.simplified === wordText);
+          const key = matchingWord ? `w-${matchingWord.id}-${idx}` : `t-${idx}`;
+
+          return (
+            <span
+              key={key}
+              data-pinyin={matchingWord?.pinyin ?? ''}
+              data-english={matchingWord?.english ?? ''}
+              style={{
+                cursor: matchingWord ? 'pointer' : 'default',
+                background: isHighlighted ? 'rgba(34, 197, 94, 0.6)' : (matchingWord ? 'rgba(255, 255, 0, 0.06)' : 'transparent'),
+                borderBottom: matchingWord ? '1px solid rgba(255, 255, 255, 0.15)' : 'none',
+                marginRight: matchingWord ? '2px' : '0',
+                transition: 'background 0.2s ease',
+              }}
+              className="word-token"
+              aria-label={matchingWord ? `${matchingWord.simplified}, pinyin ${convertPinyinStyle(matchingWord.pinyin, pinyinStyle)}, ${matchingWord.english}` : undefined}
+              tabIndex={matchingWord ? 0 : -1}
+              title={matchingWord ? `${convertPinyinStyle(matchingWord.pinyin, pinyinStyle)} — ${matchingWord.english}` : undefined}
+              onClick={matchingWord ? (e) => {
+                e.stopPropagation();
+                speak(matchingWord.simplified);
+              } : undefined}
+              onDoubleClick={matchingWord && onStartReadingFromToken ? (e) => {
+                e.stopPropagation();
+                onStartReadingFromToken(idx);
+              } : undefined}
+            >
+              {showPinyin && matchingWord ? (
+                <ruby style={{ lineHeight: 2.2 }}>
+                  {convertChineseText(wordText, textVariant)}
+                  <rt style={{ fontSize: '0.6em', opacity: 0.9, marginBottom: '2px' }}>
+                    {convertPinyinStyle(matchingWord.pinyin, pinyinStyle)}
+                  </rt>
+                </ruby>
+              ) : (
+                convertChineseText(wordText, textVariant)
+              )}
+
+              {matchingWord && (
+                <div className="token-popup" role="tooltip">
+                  <div className="popup-text">
+                    <div className="popup-pinyin">{convertPinyinStyle(matchingWord.pinyin, pinyinStyle)}</div>
+                    <div className="popup-english">{matchingWord.english}</div>
+                  </div>
+                  <div className="popup-actions">
+                    <button
+                      type="button"
+                      className="speak-btn"
+                      onClick={() => speak(matchingWord.simplified)}
+                      title="Listen to pronunciation"
+                    >
+                      🔊
+                    </button>
+                    {onToggle && (
+                      <>
+                        <button
+                          type="button"
+                          className={`learn-btn ${learnedSet?.has(matchingWord.id) ? 'learned' : ''}`}
+                          onClick={() => onToggle(matchingWord.id)}
+                          disabled={markingSet?.has(matchingWord.id)}
+                          title={learnedSet?.has(matchingWord.id) ? 'Mark as not learned' : 'Mark as learned'}
+                        >
+                          {markingSet?.has(matchingWord.id) ? '⏳' : (learnedSet?.has(matchingWord.id) ? '✓' : '📚')}
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </div>
+              )}
+            </span>
+          );
+        } 
+        
+        // Fallback to token-based rendering when no timings available
+        const t = (item as any).tokenData || item;
         const key = t.word ? `w-${t.word.id}-${idx}` : `t-${idx}`;
         const isHighlighted = idx === highlightedTokenIndex;
-        const isActiveWord = activeWordIndex >= 0 && segments.length > 0 && 
-          segments[activeWordIndex] && 
-          idx >= segments[activeWordIndex].start && 
-          idx < segments[activeWordIndex].end;
 
         if (showPinyin) {
           // When pinyin is shown, render every token as a ruby so the pinyin
@@ -139,7 +224,7 @@ function ArticleContent({ content, words, showPinyin = false, onToggle, markingS
               data-english={t.word?.english ?? ''}
               style={{
                 cursor: t.word ? 'pointer' : 'default',
-                background: isActiveWord ? 'rgba(255, 165, 0, 0.6)' : isHighlighted ? 'rgba(34, 197, 94, 0.4)' : (t.word ? 'rgba(255, 255, 0, 0.06)' : 'transparent'),
+                background: isHighlighted ? 'rgba(34, 197, 94, 0.6)' : (t.word ? 'rgba(255, 255, 0, 0.06)' : 'transparent'),
                 borderBottom: t.word ? '1px solid rgba(255, 255, 255, 0.15)' : 'none',
                 marginRight: t.word ? '2px' : '0',
                 transition: 'background 0.2s ease',
@@ -211,7 +296,7 @@ function ArticleContent({ content, words, showPinyin = false, onToggle, markingS
             data-english={t.word.english}
             style={{
               cursor: 'pointer',
-              background: isActiveWord ? 'rgba(255, 165, 0, 0.6)' : isHighlighted ? 'rgba(34, 197, 94, 0.4)' : 'rgba(255, 255, 0, 0.06)',
+              background: isHighlighted ? 'rgba(34, 197, 94, 0.6)' : 'rgba(255, 255, 0, 0.06)',
               borderBottom: '1px solid rgba(255, 255, 255, 0.15)',
               marginRight: '2px',
               transition: 'background 0.2s ease',
@@ -291,18 +376,15 @@ export default function Articles(): React.ReactElement {
   const [selectedVoice, setSelectedVoice] = useState<string>('zh-CN-XiaoxiaoNeural');
   const [availableVoices] = useState<string[]>(['zh-CN-XiaoxiaoNeural', 'zh-CN-XiaoyiNeural', 'zh-CN-YunjianNeural', 'zh-CN-YunxiNeural', 'zh-CN-YunxiaNeural', 'zh-CN-YunyangNeural']);
   const [voicesLoaded, setVoicesLoaded] = useState<boolean>(true);
-  const [currentAudio, setCurrentAudio] = useState<HTMLAudioElement | null>(null);
-  const [audioSegments, setAudioSegments] = useState<Array<{ text: string; start: number; end: number; index: number }>>([]);
-  const [activeWordIndex, setActiveWordIndex] = useState<number>(-1);
+  const [currentAudioSrc, setCurrentAudioSrc] = useState<string | null>(null);
+  const [, setAudioSegments] = useState<Array<{ text: string; start: number; end: number; index: number }>>([]);
+  const [tokens, setTokens] = useState<Array<{ text: string; word?: Word; index: number }>>([]);
+  const [wordTimings, setWordTimings] = useState<Array<{ word: string; start: number; duration: number; audioOffset: number }>>([]);
   const [readingArticleId, setReadingArticleId] = useState<number | null>(null);
   const [highlightedTokenIndex, setHighlightedTokenIndex] = useState<number>(-1);
-  const [isPaused, setIsPaused] = useState<boolean>(false);
-  const [totalTokens, setTotalTokens] = useState<number>(0);
-  const [currentAudioTime, setCurrentAudioTime] = useState<number>(0); // Track current audio time
-  const [audioDuration, setAudioDuration] = useState<number>(0); // Track audio duration
-  const voiceSelectRef = useRef<HTMLSelectElement>(null);
-  const highlightTimerRef = useRef<number | null>(null);
-  const progressUpdateRef = useRef<number | null>(null);
+  const [, setIsPaused] = useState<boolean>(false);
+  const [, setCurrentAudioTime] = useState<number>(0); // Track current audio time
+  const [, setAudioDuration] = useState<number>(0); // Track audio duration
 
   // Learned word IDs (synchronized with backend) and marking state for in-flight requests
   const [learnedIds, setLearnedIds] = useState<number[]>([]);
@@ -401,39 +483,15 @@ export default function Articles(): React.ReactElement {
     setVoicesLoaded(true);
   }, []);
 
-  // Cleanup effect to handle navigation - stop audio and close dropdowns
+  // Cleanup effect to handle navigation - stop audio when component unmounts
   useEffect(() => {
     return () => {
-      // Stop any ongoing Azure TTS audio when component unmounts
-      if (currentAudio) {
-        currentAudio.pause();
-        currentAudio.currentTime = 0;
-      }
-      
-      // Clear highlight timer
-      if (highlightTimerRef.current) {
-        clearTimeout(highlightTimerRef.current);
-        highlightTimerRef.current = null;
-      }
-      
-      // Clear progress update timer
-      if (progressUpdateRef.current) {
-        clearInterval(progressUpdateRef.current);
-        progressUpdateRef.current = null;
-      }
-      
-      // Blur any focused elements (like select dropdowns) when component unmounts
-      if (voiceSelectRef.current) {
-        voiceSelectRef.current.blur();
-      }
-      
       // Reset reading state
       setReadingArticleId(null);
       setHighlightedTokenIndex(-1);
-      setIsPaused(false);
-      setActiveWordIndex(-1);
+      setCurrentAudioSrc(null);
     };
-  }, [currentAudio]);
+  }, []);
 
   // Fetch initial learned IDs from backend
   useEffect(() => {
@@ -569,15 +627,8 @@ export default function Articles(): React.ReactElement {
       
       const data = await response.json();
       
-      // Stop any current audio
-      if (currentAudio) {
-        currentAudio.pause();
-        currentAudio.currentTime = 0;
-      }
-      
       // Create new audio element and play
       const audio = new Audio(`data:audio/wav;base64,${data.audioData}`);
-      setCurrentAudio(audio);
       audio.play();
     } catch (error) {
       console.error('TTS Error:', error);
@@ -585,45 +636,29 @@ export default function Articles(): React.ReactElement {
     }
   };
 
-  const readParagraph = async (articleId: number, content: string, words: Word[], startPosition?: number) => {
-    // 1. If clicking the currently playing article
-    if (readingArticleId === articleId && currentAudio) {
-      if (currentAudio.paused) {
-        // Resume
-        try {
-          await currentAudio.play();
-          setIsPaused(false);
-        } catch (e) {
-          console.error("Resume failed", e);
-        }
-      } else {
-        // Pause
-        currentAudio.pause();
-        setIsPaused(true);
-      }
+  const readParagraph = async (articleId: number, content: string, words: Word[], _startPosition?: number) => {
+    // 1. If clicking the currently playing article, let the native player handle it
+    if (readingArticleId === articleId && currentAudioSrc) {
+      // Audio is already loaded, user can control it with native controls
       return;
     }
 
-    // 2. New Article or Start/Restart: Stop existing
-    if (currentAudio) {
-      currentAudio.pause();
-      currentAudio.currentTime = 0;
-      setCurrentAudio(null);
-    }
+    // 2. Stop any existing audio (reset)
+    setCurrentAudioSrc(null);
     
     // Reset State
     setReadingArticleId(articleId);
     setHighlightedTokenIndex(-1);
     setIsPaused(false);
-    setActiveWordIndex(-1);
     setCurrentAudioTime(0);
     setAudioDuration(0);
+    setWordTimings([]);  // Clear previous word timings
 
     // 3. Start new reading
-    await startAzureReading(articleId, content, words, startPosition || 0);
+    await startAzureReading(articleId, content, words);
   };
 
-  const startAzureReading = async (_articleId: number, content: string, _words: Word[], startTime: number = 0) => {
+  const startAzureReading = async (_articleId: number, content: string, _words: Word[]) => {
     try {
       const convertedContent = convertChineseText(content, localTextVariant);
       
@@ -633,7 +668,8 @@ export default function Articles(): React.ReactElement {
         body: JSON.stringify({
           text: convertedContent,
           voice: selectedVoice,
-          rate: speechRate.toString()
+          rate: speechRate.toString(),
+          words: _words
         })
       });
       
@@ -641,92 +677,20 @@ export default function Articles(): React.ReactElement {
       
       const data = await response.json();
       
-      // Calculate token count for fallback highlighting
-      const tokens = tokenize(convertedContent, _words);
-      setTotalTokens(tokens.length);
+      // Set audio segments and tokenization from backend
       setAudioSegments(data.segments || []);
+      setTokens(data.tokens || []);
+      setWordTimings(data.timings || []);
       
-      // Create Audio Object - DO NOT pass src in constructor to ensure listeners catch everything
-      const audio = new Audio();
       
-      // Store mappings in a closure for the event listener to access efficiently
-      const mappings = data.mappings || [];
-      const segments = data.segments || [];
-
-      // --- Event Listeners ---
-      
-      // 1. Time Update (Progress & Highlighting)
-      audio.ontimeupdate = () => {
-        const now = audio.currentTime;
-        setCurrentAudioTime(now);
-        // Ensure duration is captured if it wasn't earlier
-        if (audio.duration && audio.duration !== Infinity) {
-             setAudioDuration(audio.duration);
-        }
-
-        const nowMs = now * 1000;
-        let activeIndex = -1;
-        let highlightIndex = -1;
-
-        // A. Try exact mapping from API
-        if (mappings.length > 0) {
-          for (let i = 0; i < mappings.length; i++) {
-            const m = mappings[i];
-            // Add a small buffer/fuzz factor
-            if (nowMs >= m.start && nowMs <= (m.start + m.duration)) {
-              activeIndex = m.segmentIndex;
-              if (activeIndex !== -1 && segments[activeIndex]) {
-                highlightIndex = segments[activeIndex].start;
-              }
-              break;
-            }
-          }
-        }
-        
-        // B. Fallback: Estimate if no precise mapping found
-        if (highlightIndex < 0 && audio.duration > 0) {
-           const percent = now / audio.duration;
-           const estimated = Math.floor(percent * tokens.length);
-           highlightIndex = Math.min(estimated, tokens.length - 1);
-        }
-
-        setActiveWordIndex(activeIndex);
-        setHighlightedTokenIndex(highlightIndex);
-      };
-
-      // 2. Metadata Loaded (Get Duration)
-      audio.onloadedmetadata = () => {
-        if (audio.duration && audio.duration !== Infinity) {
-          setAudioDuration(audio.duration);
-        }
-      };
-
-      // 3. Play/Pause State Sync
-      audio.onplay = () => setIsPaused(false);
-      audio.onpause = () => setIsPaused(true);
-      audio.onended = () => {
-        setIsPaused(false);
-        setReadingArticleId(null);
-        setActiveWordIndex(-1);
-        setHighlightedTokenIndex(-1);
-        setCurrentAudioTime(0);
-      };
-
-      // --- Init Audio ---
-      
-      // Set Source AFTER listeners are attached
-      audio.src = `data:audio/wav;base64,${data.audioData}`;
-      
-      // Handle Start Time
-      if (startTime > 0) {
-        audio.currentTime = startTime / 1000;
+      // Set duration from TTS response
+      if (data.totalDuration && data.totalDuration > 0) {
+        setAudioDuration(data.totalDuration / 1000);
       }
 
-      // Save to state
-      setCurrentAudio(audio);
-
-      // Play
-      await audio.play();
+      // Set the audio source for the native player
+      const audioSrc = `data:audio/wav;base64,${data.audioData}`;
+      setCurrentAudioSrc(audioSrc);
 
     } catch (error) {
       console.error('Azure TTS Error:', error);
@@ -922,7 +886,6 @@ export default function Articles(): React.ReactElement {
             2.0x
           </button>
           <select
-            ref={voiceSelectRef}
             value={selectedVoice}
             onChange={(e) => setSelectedVoice(e.target.value)}
             style={{
@@ -975,18 +938,11 @@ export default function Articles(): React.ReactElement {
                     color: 'var(--muted-color)',
                     minWidth: '70px' // Stable width
                   }}>
-                    {readingArticleId === article.id && currentAudio ? (
-                      currentAudio.paused ? (
-                        <>
-                          <span style={{ color: 'rgb(255, 193, 7)' }}>⏸️</span>
-                          <span style={{ color: 'rgb(255, 193, 7)' }}>Paused</span>
-                        </>
-                      ) : (
-                        <>
-                          <span style={{ color: 'rgb(34, 197, 94)' }}>🎵</span>
-                          <span style={{ color: 'rgb(34, 197, 94)' }}>Playing</span>
-                        </>
-                      )
+                    {readingArticleId === article.id && currentAudioSrc ? (
+                      <>
+                        <span style={{ color: 'rgb(34, 197, 94)' }}>🎵</span>
+                        <span style={{ color: 'rgb(34, 197, 94)' }}>Playing</span>
+                      </>
                     ) : readingArticleId === article.id ? (
                       <>
                         <span style={{ color: 'rgba(128, 128, 128, 0.7)' }}>⏳</span>
@@ -1012,10 +968,10 @@ export default function Articles(): React.ReactElement {
                 </div>
               </header>
 
-              {/* Stable Audio Progress Bar - Always Present */}
+              {/* Native HTML5 Audio Player */}
               <div style={{ 
                 marginBottom: 16, 
-                padding: readingArticleId === article.id ? '12px 16px' : '8px 16px',
+                padding: '12px 16px',
                 background: readingArticleId === article.id 
                   ? 'rgba(34, 197, 94, 0.05)' 
                   : 'rgba(128, 128, 128, 0.02)', 
@@ -1025,237 +981,135 @@ export default function Articles(): React.ReactElement {
                   : '1px solid rgba(255, 255, 255, 0.05)',
                 transition: 'all 0.3s ease'
               }}>
-                {/* Audio Controls and Progress */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: readingArticleId === article.id ? 8 : 0 }}>
-                  {/* Play/Pause Button */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
                   <button
                     onClick={() => readParagraph(article.id, article.content, article.words)}
                     disabled={!voicesLoaded}
                     style={{
-                      padding: '6px 10px',
-                      background: !voicesLoaded 
-                        ? 'rgba(128, 128, 128, 0.1)' 
-                        : readingArticleId === article.id && currentAudio && !isPaused
-                        ? 'rgba(255, 193, 7, 0.1)' // Yellow for pause
-                        : 'rgba(34, 197, 94, 0.1)', // Green for play
-                      border: `1px solid ${!voicesLoaded 
-                        ? 'rgba(128, 128, 128, 0.3)'
-                        : readingArticleId === article.id && currentAudio && !isPaused
-                        ? 'rgb(255, 193, 7)'
-                        : 'rgb(34, 197, 94)'}`,
-                      borderRadius: 4,
-                      fontSize: '0.8em',
+                      padding: '8px 12px',
+                      background: readingArticleId === article.id && currentAudioSrc
+                        ? 'rgba(34, 197, 94, 0.1)'
+                        : 'rgba(59, 130, 246, 0.1)',
+                      border: '1px solid rgb(34, 197, 94)',
+                      borderRadius: 6,
+                      fontSize: '0.85em',
                       cursor: voicesLoaded ? 'pointer' : 'not-allowed',
-                      opacity: voicesLoaded ? 1 : 0.6,
-                      color: !voicesLoaded 
-                        ? 'rgba(128, 128, 128, 0.7)'
-                        : readingArticleId === article.id && currentAudio && !isPaused
-                        ? 'rgb(255, 193, 7)'
-                        : 'rgb(34, 197, 94)',
+                      color: 'rgb(34, 197, 94)',
                       fontWeight: 500,
-                      minWidth: '36px',
-                      height: '28px'
+                      opacity: voicesLoaded ? 1 : 0.6
                     }}
-                    title={
-                      !voicesLoaded
-                        ? 'TTS Loading...'
-                        : readingArticleId === article.id && currentAudio && !isPaused 
-                        ? 'Pause audio' 
-                        : readingArticleId === article.id && currentAudio && isPaused
-                        ? 'Resume audio'
-                        : 'Play article audio'
-                    }
+                    title={readingArticleId === article.id ? 'Audio is ready' : 'Generate and play audio'}
                   >
-                    {!voicesLoaded 
-                      ? '⏳'
-                      : readingArticleId === article.id && currentAudio && !isPaused
-                      ? '⏸️' 
-                      : '▶️'}
+                    {!voicesLoaded ? '⏳ Loading...' : readingArticleId === article.id ? '🎧 Audio Ready' : '▶️ Play Article'}
                   </button>
-
-                  {/* Stop Button */}
-                  <button
-                    onClick={() => {
-                      if (currentAudio) {
-                        currentAudio.pause();
-                        currentAudio.currentTime = 0;
-                        setCurrentAudio(null);
-                      }
-                      if (progressUpdateRef.current) {
-                        clearInterval(progressUpdateRef.current);
-                        progressUpdateRef.current = null;
-                      }
-                      setReadingArticleId(null);
-                      setActiveWordIndex(-1);
-                      setHighlightedTokenIndex(-1);
-                      setIsPaused(false);
-                      setCurrentAudioTime(0);
-                      setAudioDuration(0);
-                    }}
-                    disabled={readingArticleId !== article.id}
-                    style={{
-                      padding: '6px 8px',
-                      background: readingArticleId === article.id 
-                        ? 'rgba(220, 38, 38, 0.1)' 
-                        : 'rgba(128, 128, 128, 0.05)',
-                      border: readingArticleId === article.id 
-                        ? '1px solid rgb(220, 38, 38)' 
-                        : '1px solid rgba(128, 128, 128, 0.3)',
-                      borderRadius: 4,
-                      fontSize: '0.8em',
-                      cursor: readingArticleId === article.id ? 'pointer' : 'not-allowed',
-                      color: readingArticleId === article.id 
-                        ? 'rgb(220, 38, 38)' 
-                        : 'rgba(128, 128, 128, 0.5)',
-                      fontWeight: 500,
-                      opacity: readingArticleId === article.id ? 1 : 0.5,
-                      minWidth: '28px',
-                      height: '28px'
-                    }}
-                    title={readingArticleId === article.id ? "Stop audio" : "No audio playing"}
-                  >
-                    ⏹️
-                  </button>
-
-                  {/* Time/Progress Display */}
-                  <span style={{ 
-                    fontSize: '0.8em', 
-                    color: readingArticleId === article.id ? 'rgb(34, 197, 94)' : 'var(--muted-color)', 
-                    minWidth: '80px',
-                    fontFamily: 'monospace',
-                    fontWeight: readingArticleId === article.id ? 500 : 400
-                  }}>
-                    {readingArticleId === article.id && currentAudio ? (
-                      audioDuration > 0 ? 
-                        `${Math.floor(currentAudioTime)}s / ${Math.floor(audioDuration)}s` :
-                        totalTokens > 0 ? 
-                        `Word ${Math.max(1, highlightedTokenIndex + 1)}/${totalTokens}` :
-                        'Playing...'
-                    ) : readingArticleId === article.id ? 
-                      'Loading...' : 
-                      'Ready'
-                    }
-                  </span>
                   
-                  <div 
-                    style={{ 
-                      flex: 1, 
-                      height: readingArticleId === article.id ? '6px' : '3px', 
-                      background: 'rgba(255, 255, 255, 0.15)', 
-                      borderRadius: '3px', 
-                      position: 'relative',
-                      cursor: readingArticleId === article.id ? 'pointer' : 'default',
-                      transition: 'height 0.3s ease'
-                    }}
-                    onClick={(e) => {
-                      if (currentAudio && readingArticleId === article.id && audioDuration > 0) {
-                        const rect = e.currentTarget.getBoundingClientRect();
-                        const clickX = e.clientX - rect.left;
-                        const percentage = clickX / rect.width;
-                        const targetTime = percentage * audioDuration;
-                        
-                        currentAudio.currentTime = targetTime;
-                        setCurrentAudioTime(targetTime);
-                        
-                        if (currentAudio.paused) {
-                          setIsPaused(true);
-                        }
-                      }
-                    }}
-                    onMouseEnter={(e) => {
-                      if (readingArticleId === article.id) {
-                        e.currentTarget.style.height = '8px';
-                      }
-                    }}
-                    onMouseLeave={(e) => {
-                      if (readingArticleId === article.id) {
-                        e.currentTarget.style.height = '6px';
-                      }
-                    }}
-                  >
-                    {/* Progress fill */}
-                    <div 
-                      style={{ 
-                        width: readingArticleId === article.id && currentAudio ? (
-                          audioDuration > 0 ?
-                            `${Math.max(0, Math.min(100, (currentAudioTime / audioDuration) * 100))}%` :
-                            totalTokens > 0 ?
-                            `${Math.max(0, Math.min(100, ((highlightedTokenIndex + 1) / totalTokens) * 100))}%` :
-                            '0%'
-                        ) : '0%',
-                        height: '100%', 
-                        background: readingArticleId === article.id && currentAudio ? 
-                          (currentAudio.paused ?
-                            'linear-gradient(90deg, rgb(255, 193, 7) 0%, rgba(255, 193, 7, 0.7) 100%)' :
-                            'linear-gradient(90deg, rgb(34, 197, 94) 0%, rgba(34, 197, 94, 0.7) 100%)'
-                          ) :
-                          readingArticleId === article.id ?
-                          'rgba(128, 128, 128, 0.5)' :
-                          'rgba(128, 128, 128, 0.3)',
-                        borderRadius: '3px',
-                        transition: 'width 0.2s ease, background 0.3s ease',
-                        position: 'relative'
+                  {readingArticleId === article.id && (
+                    <button
+                      onClick={() => {
+                        setCurrentAudioSrc(null);
+                        setReadingArticleId(null);
+                        setHighlightedTokenIndex(-1);
+                        setIsPaused(false);
+                        setCurrentAudioTime(0);
+                        setAudioDuration(0);
                       }}
+                      style={{
+                        padding: '6px 10px',
+                        background: 'rgba(220, 38, 38, 0.1)',
+                        border: '1px solid rgb(220, 38, 38)',
+                        borderRadius: 4,
+                        fontSize: '0.8em',
+                        cursor: 'pointer',
+                        color: 'rgb(220, 38, 38)',
+                        fontWeight: 500
+                      }}
+                      title="Stop and reset audio"
                     >
-                      {/* Scrubber handle - only when active */}
-                      {readingArticleId === article.id && (
-                        <div 
-                          style={{ 
-                            position: 'absolute', 
-                            right: '-4px', 
-                            top: '50%', 
-                            transform: 'translateY(-50%)', 
-                            width: '8px', 
-                            height: '8px', 
-                            background: 'white', 
-                            borderRadius: '50%',
-                            border: '1px solid rgba(0,0,0,0.2)',
-                            boxShadow: '0 1px 2px rgba(0,0,0,0.3)',
-                            transition: 'transform 0.2s ease'
-                          }}
-                        />
-                      )}
-                    </div>
-                  </div>
+                      ⏹️ Stop
+                    </button>
+                  )}
                   
-                  <span style={{ 
-                    fontSize: '0.75em', 
-                    color: readingArticleId === article.id ? 'rgb(34, 197, 94)' : 'var(--muted-color)', 
-                    minWidth: '35px', 
-                    textAlign: 'right',
-                    fontWeight: readingArticleId === article.id ? 500 : 400
+                  <div style={{ 
+                    fontSize: '0.8em', 
+                    color: 'var(--muted-color)',
+                    display: 'flex',
+                    gap: 12
                   }}>
-                    {readingArticleId === article.id && currentAudio ? (
-                      audioDuration > 0 ?
-                        Math.round((currentAudioTime / audioDuration) * 100) :
-                        totalTokens > 0 ?
-                        Math.round(((highlightedTokenIndex + 1) / totalTokens) * 100) :
-                        0
-                    ) : 0}%
-                  </span>
+                    <span>Speed: {speechRate}x</span>
+                    <span>Voice: {selectedVoice.replace('zh-CN-', '').replace('Neural', '') || 'Default'}</span>
+                  </div>
                 </div>
                 
-                {/* Expanded Controls - Only when active */}
-                {readingArticleId === article.id && (
-                  <div style={{ 
-                    display: 'flex', 
-                    justifyContent: 'space-between', 
-                    alignItems: 'center',
-                    fontSize: '0.75em',
-                    color: 'var(--muted-color)',
-                    borderTop: '1px solid rgba(34, 197, 94, 0.1)',
-                    paddingTop: 8,
-                    marginTop: 4
-                  }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                      <span>Speed: {speechRate}x</span>
-                      <span>Voice: {selectedVoice.replace('zh-CN-', '').replace('Neural', '') || 'Default'}</span>
-                    </div>
-                    <div>
-                      {currentAudio ? (
-                        currentAudio.paused ? '⏸️ Paused' : '🎵 Playing'
-                      ) : '⏳ Loading'}
-                    </div>
+                {/* Native Audio Element - Only show when audio is ready */}
+                {readingArticleId === article.id && currentAudioSrc && (
+                  <div style={{ marginTop: 8 }}>
+                    <audio 
+                      controls 
+                      style={{ 
+                        width: '100%', 
+                        height: '40px',
+                        accentColor: 'rgb(34, 197, 94)'
+                      }}
+                      onTimeUpdate={(e) => {
+                        const audio = e.currentTarget;
+                        setCurrentAudioTime(audio.currentTime);
+                        
+                        // Update highlighting based on current time using word timings
+                        const nowMs = audio.currentTime * 1000;
+                        
+                        if (wordTimings.length > 0) {
+                          // Use direct word timings from backend - now using direct index mapping
+                          let highlightedWordIndex = -1;
+                          
+                          for (let i = 0; i < wordTimings.length; i++) {
+                            const timing = wordTimings[i];
+                            const wordStart = timing.start;
+                            const wordEnd = timing.start + timing.duration;
+                            
+                            if (nowMs >= wordStart && nowMs <= wordEnd) {
+                              highlightedWordIndex = i;
+                              console.log(`Highlighting word ${highlightedWordIndex} for time ${nowMs.toFixed(0)}ms: "${timing.word}"`);
+                              break;
+                            }
+                          }
+                          
+                          // Debug when no timing is found
+                          if (highlightedWordIndex === -1) {
+                            // Don't log on every frame, just when we lose highlighting
+                            if (highlightedTokenIndex >= 0) {
+                              console.log(`No word timing found for time ${nowMs.toFixed(0)}ms`);
+                            }
+                          }
+                          
+                          // Always update, even if -1 to clear highlighting between words
+                          setHighlightedTokenIndex(highlightedWordIndex);
+                        } else if (tokens.length > 0) {
+                          // Fallback highlighting based on duration and backend tokens
+                          if (audio.duration > 0) {
+                            const percent = audio.currentTime / audio.duration;
+                            const estimatedTokenIndex = Math.floor(percent * tokens.length);
+                            const clampedIndex = Math.max(0, Math.min(estimatedTokenIndex, tokens.length - 1));
+                            setHighlightedTokenIndex(clampedIndex);
+                          }
+                        }
+                      }}
+                      onLoadedMetadata={(e) => {
+                        const audio = e.currentTarget;
+                        if (audio.duration && audio.duration !== Infinity) {
+                          setAudioDuration(audio.duration);
+                        }
+                      }}
+                      onPlay={() => setIsPaused(false)}
+                      onPause={() => setIsPaused(true)}
+                      onEnded={() => {
+                        setIsPaused(false);
+                        setReadingArticleId(null);
+                        setHighlightedTokenIndex(-1);
+                        setCurrentAudioTime(0);
+                      }}
+                      src={currentAudioSrc}
+                      autoPlay
+                    />
                   </div>
                 )}
               </div>
@@ -1274,9 +1128,9 @@ export default function Articles(): React.ReactElement {
                 selectedVoice={selectedVoice}
                 speechRate={speechRate}
                 onStartReadingFromToken={(tokenIndex) => startReadingFromToken(article.id, article.content, article.words, tokenIndex)}
-                segments={audioSegments}
-                activeWordIndex={readingArticleId === article.id ? activeWordIndex : -1}
                 textVariant={localTextVariant}
+                backendTokens={readingArticleId === article.id ? tokens : []}
+                wordTimings={readingArticleId === article.id ? wordTimings : []}
               />
 
               {article.words && article.words.length > 0 && (

@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import * as sdk from 'microsoft-cognitiveservices-speech-sdk';
 import { body, validationResult } from 'express-validator';
 import { TTSSegmentationService } from '../services/tts-segmentation.service';
+import { TokenizationService } from '../services/tokenization.service';
 import { createHash } from 'crypto';
 import prisma from '../prisma/client';
 
@@ -28,6 +29,8 @@ interface TTSResponse {
   totalDuration: number;
   segments: Array<{ text: string; start: number; end: number; index: number }>;
   mappings: Array<{ segmentIndex: number; start: number; duration: number; word: string }>;
+  tokens: Array<{ text: string; word?: any; index: number }>;
+  tokenMappings: Array<{ tokenIndex: number; segmentIndex: number; text: string; start: number; end: number }>;
 }
 
 // Helper function to create cache hash
@@ -43,6 +46,7 @@ router.post(
     body('text').isString().trim().notEmpty().withMessage('Text is required'),
     body('voice').optional().isString().trim(),
     body('rate').optional().isFloat({ min: 0.5, max: 2.0 }).withMessage('Rate must be between 0.5 and 2.0'),
+    body('words').optional().isArray().withMessage('Words must be an array'),
   ],
   async (req: Request, res: Response) => {
     try {
@@ -57,12 +61,13 @@ router.post(
         return;
       }
 
-      const { text, voice = 'zh-CN-XiaoxiaoNeural', rate = '1.0' } = req.body;
+      const { text, voice = 'zh-CN-XiaoxiaoNeural', rate = '1.0', words = [] } = req.body;
 
       console.log('TTS request for text:', text.substring(0, 50) + (text.length > 50 ? '...' : ''));
 
-      // Create cache hash
-      const cacheHash = createCacheHash(text, voice, rate);
+      // Create cache hash (include words for consistent tokenization)
+      const wordsString = JSON.stringify(words);
+      const cacheHash = createCacheHash(text + wordsString, voice, rate);
       
       // Check if cached version exists
       let cachedTTS = await prisma.tTSCache.findUnique({
@@ -78,13 +83,21 @@ router.post(
           data: { lastUsedAt: new Date() }
         });
 
+        // Regenerate tokenization for cached response (in case words changed)
+        const tokens = TokenizationService.tokenize(text, words);
+        const segments = JSON.parse(JSON.stringify(cachedTTS.segments)) as Array<{ text: string; start: number; end: number; index: number }>;
+        const mappings = JSON.parse(JSON.stringify(cachedTTS.mappings)) as Array<{ segmentIndex: number; start: number; duration: number; word: string }>;
+        const tokenMappings = TokenizationService.createTokenToSegmentMapping(tokens, segments, mappings);
+
         // Return cached response
         const response: TTSResponse = {
           audioData: cachedTTS.audioData,
           timings: JSON.parse(JSON.stringify(cachedTTS.timings)) as WordTiming[],
           totalDuration: cachedTTS.totalDuration,
-          segments: JSON.parse(JSON.stringify(cachedTTS.segments)) as Array<{ text: string; start: number; end: number; index: number }>,
-          mappings: JSON.parse(JSON.stringify(cachedTTS.mappings)) as Array<{ segmentIndex: number; start: number; duration: number; word: string }>
+          segments,
+          mappings,
+          tokens,
+          tokenMappings
         };
         res.json(response);
         return;
@@ -161,7 +174,19 @@ router.post(
         // Map TTS boundaries to our segments
         const mappings = TTSSegmentationService.mapTTSBoundaries(segments, wordTimings);
 
-        console.log(`TTS completed. ${wordTimings.length} boundaries, ${segments.length} segments, ${mappings.length} mappings`);
+        // Generate precise tokenization
+        const tokens = TokenizationService.tokenize(text, words);
+        const tokenMappings = TokenizationService.createTokenToSegmentMapping(tokens, segments, mappings);
+
+        console.log(`TTS completed. ${wordTimings.length} boundaries, ${segments.length} segments, ${mappings.length} mappings, ${tokens.length} tokens`);
+        
+        // Debug specific problematic text
+        if (text.includes('北卡罗莱纳州')) {
+          console.log('DEBUG: Text contains 北卡罗莱纳州');
+          console.log('Tokens:', tokens.slice(0, 20).map(t => ({ text: t.text, index: t.index })));
+          console.log('Segments:', segments.slice(0, 10));
+          console.log('Token mappings:', tokenMappings.slice(0, 10));
+        }
 
         // Cache the generated TTS
         try {
@@ -190,7 +215,9 @@ router.post(
           timings: wordTimings,
           totalDuration,
           segments,
-          mappings
+          mappings,
+          tokens,
+          tokenMappings
         };
 
         res.json(response);
