@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo, useRef } from 'react';
+import React, { useEffect, useState, useMemo, useRef, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { convertPinyinStyle } from '../utils/pinyin';
@@ -254,6 +254,7 @@ function ArticleContent({ content, words, showPinyin = false, onToggle, markingS
                       type="button"
                       className="save-btn"
                       onClick={async () => {
+                        // e.stopPropagation(); // Removed to avoid interfering with popup visibility
                         await onToggle(t.word!.id);
                       }}
                       disabled={markingSet?.has(t.word.id)}
@@ -291,7 +292,6 @@ export default function Articles(): React.ReactElement {
   const [availableVoices] = useState<string[]>(['zh-CN-XiaoxiaoNeural', 'zh-CN-XiaoyiNeural', 'zh-CN-YunjianNeural', 'zh-CN-YunxiNeural', 'zh-CN-YunxiaNeural', 'zh-CN-YunyangNeural']);
   const [voicesLoaded, setVoicesLoaded] = useState<boolean>(true);
   const [currentAudio, setCurrentAudio] = useState<HTMLAudioElement | null>(null);
-  const [, setAudioTimings] = useState<Array<{ segmentIndex: number; start: number; duration: number; word: string }>>([]);
   const [audioSegments, setAudioSegments] = useState<Array<{ text: string; start: number; end: number; index: number }>>([]);
   const [activeWordIndex, setActiveWordIndex] = useState<number>(-1);
   const [readingArticleId, setReadingArticleId] = useState<number | null>(null);
@@ -300,10 +300,8 @@ export default function Articles(): React.ReactElement {
   const [totalTokens, setTotalTokens] = useState<number>(0);
   const [currentAudioTime, setCurrentAudioTime] = useState<number>(0); // Track current audio time
   const [audioDuration, setAudioDuration] = useState<number>(0); // Track audio duration
-  const [, forceUpdate] = useState<number>(0); // For forcing UI updates
   const voiceSelectRef = useRef<HTMLSelectElement>(null);
   const highlightTimerRef = useRef<number | null>(null);
-  const timeUpdateRef = useRef<(() => void) | null>(null);
   const progressUpdateRef = useRef<number | null>(null);
 
   // Learned word IDs (synchronized with backend) and marking state for in-flight requests
@@ -315,14 +313,14 @@ export default function Articles(): React.ReactElement {
   const savedSet = useMemo(() => new Set(savedIds), [savedIds]);
   const API_URL = import.meta.env.VITE_API_URL || '';
 
-  const { user, accessToken, refreshUser } = useAuth();
+  const { user, accessToken } = useAuth();
   const navigate = useNavigate();
 
   // Get user's pinyin style preference, default to 'marks'
   const pinyinStyle = user?.pinyinStyle || 'marks';
 
   // Function to sync settings to backend
-  const syncSettingsToBackend = async (settings: {
+  const syncSettingsToBackend = useCallback(async (settings: {
     fontSize?: 'small' | 'medium' | 'large' | 'xlarge';
     speechRate?: number;
     voiceName?: string;
@@ -346,12 +344,12 @@ export default function Articles(): React.ReactElement {
         return;
       }
 
-      // Refresh user data to keep context in sync
-      await refreshUser();
+      // Don't refresh user data immediately - let the server update naturally
+      // await refreshUser(); // REMOVED to prevent infinite loops
     } catch (error) {
       console.error('Error syncing settings:', error);
     }
-  };
+  }, [user, accessToken]);
 
   // Initialize local settings from user preferences
   useEffect(() => {
@@ -374,21 +372,28 @@ export default function Articles(): React.ReactElement {
     if (user?.fontSize && localFontSize !== user.fontSize) {
       syncSettingsToBackend({ fontSize: localFontSize });
     }
-  }, [localFontSize, user?.fontSize]);
+  }, [localFontSize, user?.fontSize, syncSettingsToBackend]);
 
   // Sync speech rate changes to backend
   useEffect(() => {
     if (user?.speechRate !== undefined && speechRate !== user.speechRate) {
       syncSettingsToBackend({ speechRate });
     }
-  }, [speechRate, user?.speechRate]);
+  }, [speechRate, user?.speechRate, syncSettingsToBackend]);
 
   // Sync voice selection changes to backend
   useEffect(() => {
     if (selectedVoice !== (user?.voiceName || '')) {
       syncSettingsToBackend({ voiceName: selectedVoice || '' });
     }
-  }, [selectedVoice, user?.voiceName]);
+  }, [selectedVoice, user?.voiceName, syncSettingsToBackend]);
+
+  // Sync text variant changes to backend
+  useEffect(() => {
+    if (user?.textVariant && localTextVariant !== user.textVariant) {
+      syncSettingsToBackend({ textVariant: localTextVariant });
+    }
+  }, [localTextVariant, user?.textVariant, syncSettingsToBackend]);
 
   // Azure TTS voices are pre-defined, no need to load dynamically
   useEffect(() => {
@@ -581,76 +586,50 @@ export default function Articles(): React.ReactElement {
   };
 
   const readParagraph = async (articleId: number, content: string, words: Word[], startPosition?: number) => {
-    if (!voicesLoaded) {
-      console.log('Azure TTS not ready');
+    // 1. If clicking the currently playing article
+    if (readingArticleId === articleId && currentAudio) {
+      if (currentAudio.paused) {
+        // Resume
+        try {
+          await currentAudio.play();
+          setIsPaused(false);
+        } catch (e) {
+          console.error("Resume failed", e);
+        }
+      } else {
+        // Pause
+        currentAudio.pause();
+        setIsPaused(true);
+      }
       return;
     }
 
-    // Case 1: Clicked play button for the article currently playing. -> Pause it.
-    if (readingArticleId === articleId && currentAudio && !currentAudio.paused) {
-      console.log('Pausing current audio for the same article.');
-      currentAudio.pause();
-      setIsPaused(true);
-      return;
-    }
-
-    // Case 2: Clicked play button for the article currently paused. -> Resume it.
-    if (readingArticleId === articleId && currentAudio && currentAudio.paused) {
-      console.log('Resuming audio for the same article.');
-      setIsPaused(false);
-      // currentAudio.currentTime is already at pausedPosition (set when paused)
-      await currentAudio.play().catch(e => console.error("Error resuming audio:", e));
-      // onplay event listener on currentAudio will re-establish interval updates
-      return;
-    }
-
-    // If we reach here, it means:
-    // a) A new article is requested (`readingArticleId !== articleId`)
-    // b) No audio is currently associated (`!currentAudio` and also `readingArticleId` would likely be null)
-    // In both cases, we need to stop any existing audio and start a new audio generation/playback.
-
+    // 2. New Article or Start/Restart: Stop existing
     if (currentAudio) {
-      console.log('Stopping and resetting audio from previous article or inconsistent state.');
       currentAudio.pause();
       currentAudio.currentTime = 0;
       setCurrentAudio(null);
     }
-    // Clear any timers or related states from previous playback
-    if (highlightTimerRef.current) {
-      clearTimeout(highlightTimerRef.current);
-      highlightTimerRef.current = null;
-    }
-    if (progressUpdateRef.current) {
-      clearInterval(progressUpdateRef.current);
-      progressUpdateRef.current = null;
-    }
-
-    // Prepare for new playback
-    console.log('Starting new audio playback.');
+    
+    // Reset State
     setReadingArticleId(articleId);
     setHighlightedTokenIndex(-1);
-    setIsPaused(false); // Should be false for new playback
+    setIsPaused(false);
     setActiveWordIndex(-1);
     setCurrentAudioTime(0);
     setAudioDuration(0);
 
-    // Generate and play new audio
+    // 3. Start new reading
     await startAzureReading(articleId, content, words, startPosition || 0);
   };
 
-  const startAzureReading = async (articleId: number, content: string, _words: Word[], startTime: number = 0) => {
+  const startAzureReading = async (_articleId: number, content: string, _words: Word[], startTime: number = 0) => {
     try {
-      console.log('Starting Azure TTS reading for article:', articleId, 'from time:', startTime);
-      
-      // Convert text based on user preference for consistent TTS generation
       const convertedContent = convertChineseText(content, localTextVariant);
       
-      // Generate TTS with word timings
       const response = await fetch(`${API_URL}/api/tts`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           text: convertedContent,
           voice: selectedVoice,
@@ -658,196 +637,118 @@ export default function Articles(): React.ReactElement {
         })
       });
       
-      if (!response.ok) {
-        throw new Error(`TTS request failed: ${response.statusText}`);
-      }
+      if (!response.ok) throw new Error(`TTS request failed`);
       
       const data = await response.json();
       
-      // Stop any current audio
-      if (currentAudio) {
-        currentAudio.pause();
-        currentAudio.currentTime = 0;
-      }
-      
-      // Create audio element
-      const audio = new Audio(`data:audio/wav;base64,${data.audioData}`);
-      
-      // Set states immediately
-      setCurrentAudio(audio);
-      setAudioTimings(data.mappings || []);
-      setAudioSegments(data.segments || []);
-      
-      // Set total tokens based on actual tokenized content
+      // Calculate token count for fallback highlighting
       const tokens = tokenize(convertedContent, _words);
       setTotalTokens(tokens.length);
+      setAudioSegments(data.segments || []);
       
-      // Initialize audio state variables
-      setCurrentAudioTime(0);
-      setAudioDuration(0);
+      // Create Audio Object - DO NOT pass src in constructor to ensure listeners catch everything
+      const audio = new Audio();
       
-      // Set up time tracking for word highlighting
-      const updateActiveWord = () => {
-        if (!audio || audio.paused || !audio.duration) {
-          console.log('updateActiveWord skipped - audio:', !!audio, 'paused:', audio?.paused, 'duration:', audio?.duration);
-          return;
+      // Store mappings in a closure for the event listener to access efficiently
+      const mappings = data.mappings || [];
+      const segments = data.segments || [];
+
+      // --- Event Listeners ---
+      
+      // 1. Time Update (Progress & Highlighting)
+      audio.ontimeupdate = () => {
+        const now = audio.currentTime;
+        setCurrentAudioTime(now);
+        // Ensure duration is captured if it wasn't earlier
+        if (audio.duration && audio.duration !== Infinity) {
+             setAudioDuration(audio.duration);
         }
-        
-        const currentTime = audio.currentTime * 1000; // Convert to milliseconds
+
+        const nowMs = now * 1000;
         let activeIndex = -1;
         let highlightIndex = -1;
-        
-        // Find the current active word based on timing
-        if (data.mappings && data.mappings.length > 0) {
-          for (let i = 0; i < data.mappings.length; i++) {
-            const mapping = data.mappings[i];
-            if (currentTime >= mapping.start && currentTime <= mapping.start + mapping.duration) {
-              activeIndex = mapping.segmentIndex; // This is the index into data.segments
-              
-              // Directly use the start token index from the segment data
-              if (data.segments && activeIndex !== -1 && data.segments[activeIndex]) {
-                  highlightIndex = data.segments[activeIndex].start;
+
+        // A. Try exact mapping from API
+        if (mappings.length > 0) {
+          for (let i = 0; i < mappings.length; i++) {
+            const m = mappings[i];
+            // Add a small buffer/fuzz factor
+            if (nowMs >= m.start && nowMs <= (m.start + m.duration)) {
+              activeIndex = m.segmentIndex;
+              if (activeIndex !== -1 && segments[activeIndex]) {
+                highlightIndex = segments[activeIndex].start;
               }
               break;
             }
           }
         }
         
-        // Fallback: estimate position based on time progress - this should be for highlightedTokenIndex if no mapping is found.
-        if (highlightIndex < 0) { // Only use fallback if highlightIndex wasn't set by mapping
-          // Ensure we tokenize the same content that was sent to TTS
-          const tokens = tokenize(convertedContent, _words); 
-          const timeProgress = Math.min(1, currentTime / (audio.duration * 1000));
-          const estimatedIndex = Math.floor(timeProgress * Math.max(1, tokens.length - 1));
-          highlightIndex = Math.max(0, estimatedIndex);
+        // B. Fallback: Estimate if no precise mapping found
+        if (highlightIndex < 0 && audio.duration > 0) {
+           const percent = now / audio.duration;
+           const estimated = Math.floor(percent * tokens.length);
+           highlightIndex = Math.min(estimated, tokens.length - 1);
         }
-        
-        console.log('updateActiveWord - time:', Math.floor(currentTime/1000), 'activeIndex:', activeIndex, 'highlightIndex:', highlightIndex);
-        
+
         setActiveWordIndex(activeIndex);
         setHighlightedTokenIndex(highlightIndex);
       };
-      
-      // Store the update function for cleanup
-      timeUpdateRef.current = updateActiveWord;
-      
-      audio.onloadeddata = () => {
-        console.log('Audio data loaded, duration:', audio.duration);
-        // Set duration immediately when it becomes available
-        setAudioDuration(audio.duration || 0);
-        setCurrentAudioTime(audio.currentTime || 0);
-        forceUpdate(prev => prev + 1);
-      };
 
-      audio.onplay = () => {
-        console.log('Audio started playing');
-        setIsPaused(false);
-        updateActiveWord();
-        
-        // Start progress update timer
-        progressUpdateRef.current = setInterval(() => {
-          console.log('Timer tick - currentTime:', audio.currentTime, 'duration:', audio.duration);
-          setCurrentAudioTime(audio.currentTime || 0);
-          setAudioDuration(audio.duration || 0);
-          updateActiveWord(); // Call updateActiveWord instead of just forceUpdate
-          forceUpdate(prev => prev + 1);
-        }, 100); // Update every 100ms for smooth progress
-      };
-      
-      audio.onpause = () => {
-        console.log('Audio paused');
-        setIsPaused(true);
-        
-        // Clear progress update timer
-        if (progressUpdateRef.current) {
-          clearInterval(progressUpdateRef.current);
-          progressUpdateRef.current = null;
+      // 2. Metadata Loaded (Get Duration)
+      audio.onloadedmetadata = () => {
+        if (audio.duration && audio.duration !== Infinity) {
+          setAudioDuration(audio.duration);
         }
       };
-      
+
+      // 3. Play/Pause State Sync
+      audio.onplay = () => setIsPaused(false);
+      audio.onpause = () => setIsPaused(true);
       audio.onended = () => {
-        console.log('Audio ended');
+        setIsPaused(false);
         setReadingArticleId(null);
         setActiveWordIndex(-1);
         setHighlightedTokenIndex(-1);
-        setIsPaused(false);
-        setCurrentAudio(null);
         setCurrentAudioTime(0);
-        setAudioDuration(0);
-        
-        // Clear progress update timer
-        if (progressUpdateRef.current) {
-          clearInterval(progressUpdateRef.current);
-          progressUpdateRef.current = null;
-        }
       };
+
+      // --- Init Audio ---
       
-      audio.onerror = (error) => {
-        console.error('Audio error:', error);
-        alert('Failed to play audio');
-        setReadingArticleId(null);
-        setActiveWordIndex(-1);
-        setIsPaused(false);
-        setCurrentAudioTime(0);
-        setAudioDuration(0);
-        
-        // Clear progress update timer
-        if (progressUpdateRef.current) {
-          clearInterval(progressUpdateRef.current);
-          progressUpdateRef.current = null;
-        }
-      };
+      // Set Source AFTER listeners are attached
+      audio.src = `data:audio/wav;base64,${data.audioData}`;
       
-      // Seek to start time if specified (for resume functionality)
+      // Handle Start Time
       if (startTime > 0) {
-        audio.currentTime = startTime / 1000; // Convert milliseconds to seconds
+        audio.currentTime = startTime / 1000;
       }
-      
-      // Start playing
+
+      // Save to state
+      setCurrentAudio(audio);
+
+      // Play
       await audio.play();
-      
+
     } catch (error) {
       console.error('Azure TTS Error:', error);
-      alert('Failed to generate speech with Azure TTS');
       setReadingArticleId(null);
       setIsPaused(false);
     }
   };
 
-  // Function to start reading from a specific token (for clicking on words or scrubber)
-  const startReadingFromToken = async (articleId: number, content: string, words: Word[], tokenIndex: number) => {
-    // Stop any current audio
-    if (currentAudio) {
-      currentAudio.pause();
-      currentAudio.currentTime = 0;
-      setCurrentAudio(null);
-    }
-    
-    if (highlightTimerRef.current) {
-      clearTimeout(highlightTimerRef.current);
-      highlightTimerRef.current = null;
-    }
-    
-    // For now, just start from the beginning - could be enhanced to estimate time position
-    // Future enhancement: use tokenIndex to calculate approximate start time
-    console.log('Starting from token index:', tokenIndex);
-    await readParagraph(articleId, content, words, 0);
+  const startReadingFromToken = async (articleId: number, content: string, words: Word[], _tokenIndex: number) => {
+      readParagraph(articleId, content, words, 0); 
   };
-
 
   const fetchArticles = async () => {
     setLoading(true);
-    setError(null);
-
     try {
       const res = await fetch(`${API_URL}/api/articles`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-
-      const json = (await res.json()) as Article[];
+      const json = await res.json();
       setData(json);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : String(e));
-      setData(null);
+      setData(null); 
     } finally {
       setLoading(false);
     }
@@ -883,7 +784,7 @@ export default function Articles(): React.ReactElement {
           }}
           title={`Switch to ${localTextVariant === 'simplified' ? 'Traditional' : 'Simplified'} Chinese`}
         >
-          {localTextVariant === 'simplified' ? '繁' : '简'}
+          {localTextVariant === 'simplified' ? 'Traditional 繁' : 'Simplified 简'}
         </button>
         <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
           <span style={{ fontSize: '0.9em', color: 'var(--muted-color)' }}>Font:</span>
