@@ -14,7 +14,12 @@ var app = express();
 // Enable CORS for all routes in development.
 // You can restrict this to a specific origin, e.g.
 // app.use(cors({ origin: 'http://localhost:5173' }))
-app.use(cors())
+app.use(cors({
+  origin: [
+    "http://localhost:5173",
+    "https://ajpeng.github.io"
+  ],
+}));
 
 // view engine setup
 app.set('views', path.join(__dirname, 'views'));
