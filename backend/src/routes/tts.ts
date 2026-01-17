@@ -49,6 +49,7 @@ router.post(
     body('words').optional().isArray().withMessage('Words must be an array'),
   ],
   async (req: Request, res: Response) => {
+    console.log('Entered /api/tts POST handler');
     try {
       const errors = validationResult(req);
       if (!errors.isEmpty()) {
