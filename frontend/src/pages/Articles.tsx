@@ -84,7 +84,7 @@ function ArticleContent({ content, words, showPinyin = false, onToggle, markingS
 
   const speak = async (text: string) => {
     try {
-      const API_URL = import.meta.env.VITE_API_URL || '';
+      const API_URL = 'https://api.ajpeng.ca';
       const response = await fetch(`${API_URL}/api/tts`, {
         method: 'POST',
         headers: {
@@ -393,7 +393,7 @@ export default function Articles(): React.ReactElement {
   const learnedSet = useMemo(() => new Set(learnedIds), [learnedIds]);
   const markingSet = useMemo(() => new Set(markingIds), [markingIds]);
   const savedSet = useMemo(() => new Set(savedIds), [savedIds]);
-  const API_URL = import.meta.env.VITE_API_URL || '';
+  const API_URL = 'https://api.ajpeng.ca';
 
   const { user, accessToken } = useAuth();
   const navigate = useNavigate();
