@@ -1,0 +1,103 @@
+name: Deploy Backend
+
+on:
+  push:
+    branches: [main]
+    paths: ['backend/**']
+  workflow_dispatch: # Allow manual triggering
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+        cache-dependency-path: backend/package-lock.json
+    
+    - name: Install dependencies and build
+      run: |
+        cd backend
+        npm ci
+        npm run build
+    
+    - name: Create deployment archive
+      run: |
+        cd backend
+        tar -czf ../backend-deploy.tar.gz \
+          --exclude='node_modules' \
+          --exclude='.env' \
+          --exclude='*.log' \
+          .
+    
+    - name: Copy files to server
+      uses: appleboy/scp-action@v0.1.7
+      with:
+        host: ${{ secrets.HOST }}
+        username: ${{ secrets.USERNAME }}
+        key: ${{ secrets.SSH_PRIVATE_KEY }}
+        source: "backend-deploy.tar.gz"
+        target: "/tmp/"
+    
+    - name: Deploy on server
+      uses: appleboy/ssh-action@v1.0.3
+      with:
+        host: ${{ secrets.HOST }}
+        username: ${{ secrets.USERNAME }}
+        key: ${{ secrets.SSH_PRIVATE_KEY }}
+        script: |
+          echo "🚀 Deploying backend..."
+          
+          # Create backup
+          if [ -d "/home/ubuntu/chinese-flashcards-backend" ]; then
+            echo "📦 Creating backup..."
+            cp -r /home/ubuntu/chinese-flashcards-backend /home/ubuntu/chinese-flashcards-backend.backup.$(date +%Y%m%d_%H%M%S)
+          fi
+          
+          # Extract new files
+          echo "📁 Extracting files..."
+          mkdir -p /home/ubuntu/chinese-flashcards-backend
+          cd /home/ubuntu/chinese-flashcards-backend
+          tar -xzf /tmp/backend-deploy.tar.gz
+          rm /tmp/backend-deploy.tar.gz
+          
+          # Install production dependencies (assumes Node.js is already installed)
+          echo "📦 Installing dependencies..."
+          npm ci --production --silent
+          
+          # Generate Prisma client
+          echo "🔧 Generating Prisma client..."
+          npx prisma generate
+          
+          # Run database migrations (uncomment when ready)
+          # echo "🗄️ Running migrations..."
+          # npx prisma migrate deploy
+          
+          # Restart application with PM2 (assumes PM2 is already installed)
+          echo "🔄 Restarting application..."
+          if pm2 describe chinese-flashcards-backend > /dev/null 2>&1; then
+            pm2 restart chinese-flashcards-backend
+          else
+            pm2 start dist/bin/www.js --name chinese-flashcards-backend
+          fi
+          
+          # Save PM2 configuration
+          pm2 save
+          
+          # Health check
+          echo "🏥 Health check..."
+          sleep 3
+          pm2 status chinese-flashcards-backend
+          
+          # Test endpoint
+          if curl -f -s http://localhost:3000/health > /dev/null; then
+            echo "✅ Backend is running and responding!"
+          else
+            echo "⚠️ Backend may not be responding to health check"
+          fi

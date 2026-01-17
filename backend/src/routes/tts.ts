@@ -49,185 +49,180 @@ router.post(
     body('words').optional().isArray().withMessage('Words must be an array'),
   ],
   async (req: Request, res: Response) => {
-    try {
-      const errors = validationResult(req);
-      if (!errors.isEmpty()) {
-        res.status(400).json({ errors: errors.array() });
-        return;
-      }
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      res.status(400).json({ errors: errors.array() });
+      return;
+    }
 
-      if (!AZURE_SPEECH_KEY) {
-        res.status(500).json({ error: 'Azure Speech service not configured' });
-        return;
-      }
+    if (!AZURE_SPEECH_KEY) {
+      res.status(500).json({ error: 'Azure Speech service not configured' });
+      return;
+    }
 
-      const { text, voice = 'zh-CN-XiaoxiaoNeural', rate = '1.0', words = [] } = req.body;
+    const { text, voice = 'zh-CN-XiaoxiaoNeural', rate = '1.0', words = [] } = req.body;
 
-      console.log('TTS request for text:', text.substring(0, 50) + (text.length > 50 ? '...' : ''));
+    console.log('TTS request for text:', text.substring(0, 50) + (text.length > 50 ? '...' : ''));
 
-      // Create cache hash (include words for consistent tokenization)
-      const wordsString = JSON.stringify(words);
-      const cacheHash = createCacheHash(text + wordsString, voice, rate);
-      
-      // Check if cached version exists
-      let cachedTTS = await prisma.tTSCache.findUnique({
-        where: { textHash: cacheHash }
+    // Create cache hash (include words for consistent tokenization)
+    const wordsString = JSON.stringify(words);
+    const cacheHash = createCacheHash(text + wordsString, voice, rate);
+
+    // Check if cached version exists
+    let cachedTTS = await prisma.tTSCache.findUnique({
+      where: { textHash: cacheHash }
+    });
+
+    if (cachedTTS) {
+      console.log('Cache hit! Returning cached TTS audio');
+
+      // Update last used timestamp
+      await prisma.tTSCache.update({
+        where: { id: cachedTTS.id },
+        data: { lastUsedAt: new Date() }
       });
 
-      if (cachedTTS) {
-        console.log('Cache hit! Returning cached TTS audio');
-        
-        // Update last used timestamp
-        await prisma.tTSCache.update({
-          where: { id: cachedTTS.id },
-          data: { lastUsedAt: new Date() }
-        });
+      // Regenerate tokenization for cached response (in case words changed)
+      const tokens = TokenizationService.tokenize(text, words);
+      const segments = JSON.parse(JSON.stringify(cachedTTS.segments)) as Array<{ text: string; start: number; end: number; index: number }>;
+      const mappings = JSON.parse(JSON.stringify(cachedTTS.mappings)) as Array<{ segmentIndex: number; start: number; duration: number; word: string }>;
+      const tokenMappings = TokenizationService.createTokenToSegmentMapping(tokens, segments, mappings);
 
-        // Regenerate tokenization for cached response (in case words changed)
-        const tokens = TokenizationService.tokenize(text, words);
-        const segments = JSON.parse(JSON.stringify(cachedTTS.segments)) as Array<{ text: string; start: number; end: number; index: number }>;
-        const mappings = JSON.parse(JSON.stringify(cachedTTS.mappings)) as Array<{ segmentIndex: number; start: number; duration: number; word: string }>;
-        const tokenMappings = TokenizationService.createTokenToSegmentMapping(tokens, segments, mappings);
+      // Return cached response
+      const response: TTSResponse = {
+        audioData: cachedTTS.audioData,
+        timings: JSON.parse(JSON.stringify(cachedTTS.timings)) as WordTiming[],
+        totalDuration: cachedTTS.totalDuration,
+        segments,
+        mappings,
+        tokens,
+        tokenMappings
+      };
+      res.json(response);
+      return;
+    }
 
-        // Return cached response
-        const response: TTSResponse = {
-          audioData: cachedTTS.audioData,
-          timings: JSON.parse(JSON.stringify(cachedTTS.timings)) as WordTiming[],
-          totalDuration: cachedTTS.totalDuration,
-          segments,
-          mappings,
-          tokens,
-          tokenMappings
-        };
-        res.json(response);
-        return;
+    console.log('Cache miss. Generating new TTS audio');
+
+    // Segment text for consistent word boundaries
+    const segments = TTSSegmentationService.segmentText(text);
+    console.log('Segmented into', segments.length, 'words');
+
+    // Preprocess text for better TTS boundaries
+    const processedText = TTSSegmentationService.preprocessForTTS(text);
+
+    // Create speech config
+    const speechConfig = sdk.SpeechConfig.fromSubscription(AZURE_SPEECH_KEY, AZURE_SPEECH_REGION);
+    speechConfig.speechSynthesisVoiceName = voice;
+
+    // Create SSML with rate adjustment
+    const ssml = `
+      <speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xml:lang="zh-CN">
+        <voice name="${voice}">
+          <prosody rate="${rate}">${processedText}</prosody>
+        </voice>
+      </speak>
+    `;
+
+    // Use pull audio output stream to capture audio data
+    const pullStreamConfig = sdk.AudioConfig.fromDefaultSpeakerOutput();
+    const synthesizer = new sdk.SpeechSynthesizer(speechConfig, pullStreamConfig);
+
+    const wordTimings: WordTiming[] = [];
+
+    // Set up word boundary event listener
+    synthesizer.wordBoundary = (sender, event) => {
+      const audioOffsetMs = event.audioOffset / 10000; // Convert from ticks to milliseconds
+      const durationMs = event.duration / 10000; // Convert from ticks to milliseconds
+      
+      console.log(`Word boundary: ${event.text} at ${audioOffsetMs}ms, duration: ${durationMs}ms`);
+      
+      wordTimings.push({
+        word: event.text,
+        start: audioOffsetMs,
+        duration: durationMs,
+        audioOffset: event.audioOffset
+      });
+    };
+
+    // Synthesize speech and capture audio
+    const result = await new Promise<sdk.SpeechSynthesisResult>((resolve, reject) => {
+      synthesizer.speakSsmlAsync(
+        ssml,
+        (result) => {
+          resolve(result);
+        },
+        (error) => {
+          reject(new Error(error));
+        }
+      );
+    });
+
+    // Clean up
+    synthesizer.close();
+
+    if (result.reason === sdk.ResultReason.SynthesizingAudioCompleted) {
+      // Convert audio buffer to base64
+      const audioData = Buffer.from(result.audioData).toString('base64');
+      
+      // Calculate total duration
+      const totalDuration = wordTimings.length > 0 
+        ? Math.max(...wordTimings.map(w => w.start + w.duration))
+        : 0;
+
+      // Map TTS boundaries to our segments
+      const mappings = TTSSegmentationService.mapTTSBoundaries(segments, wordTimings);
+
+      // Generate precise tokenization
+      const tokens = TokenizationService.tokenize(text, words);
+      const tokenMappings = TokenizationService.createTokenToSegmentMapping(tokens, segments, mappings);
+
+      console.log(`TTS completed. ${wordTimings.length} boundaries, ${segments.length} segments, ${mappings.length} mappings, ${tokens.length} tokens`);
+      
+      // Debug specific problematic text
+      if (text.includes('北卡罗莱纳州')) {
+        console.log('DEBUG: Text contains 北卡罗莱纳州');
+        console.log('Tokens:', tokens.slice(0, 20).map(t => ({ text: t.text, index: t.index })));
+        console.log('Segments:', segments.slice(0, 10));
+        console.log('Token mappings:', tokenMappings.slice(0, 10));
       }
 
-      console.log('Cache miss. Generating new TTS audio');
-
-      // Segment text for consistent word boundaries
-      const segments = TTSSegmentationService.segmentText(text);
-      console.log('Segmented into', segments.length, 'words');
-
-      // Preprocess text for better TTS boundaries
-      const processedText = TTSSegmentationService.preprocessForTTS(text);
-
-      // Create speech config
-      const speechConfig = sdk.SpeechConfig.fromSubscription(AZURE_SPEECH_KEY, AZURE_SPEECH_REGION);
-      speechConfig.speechSynthesisVoiceName = voice;
-
-      // Create SSML with rate adjustment
-      const ssml = `
-        <speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xml:lang="zh-CN">
-          <voice name="${voice}">
-            <prosody rate="${rate}">${processedText}</prosody>
-          </voice>
-        </speak>
-      `;
-
-      // Use pull audio output stream to capture audio data
-      const pullStreamConfig = sdk.AudioConfig.fromDefaultSpeakerOutput();
-      const synthesizer = new sdk.SpeechSynthesizer(speechConfig, pullStreamConfig);
-
-      const wordTimings: WordTiming[] = [];
-
-      // Set up word boundary event listener
-      synthesizer.wordBoundary = (sender, event) => {
-        const audioOffsetMs = event.audioOffset / 10000; // Convert from ticks to milliseconds
-        const durationMs = event.duration / 10000; // Convert from ticks to milliseconds
-        
-        console.log(`Word boundary: ${event.text} at ${audioOffsetMs}ms, duration: ${durationMs}ms`);
-        
-        wordTimings.push({
-          word: event.text,
-          start: audioOffsetMs,
-          duration: durationMs,
-          audioOffset: event.audioOffset
+      // Cache the generated TTS
+      try {
+        await prisma.tTSCache.create({
+          data: {
+            textHash: cacheHash,
+            text,
+            voice,
+            rate,
+            audioData,
+            timings: JSON.parse(JSON.stringify(wordTimings)),
+            totalDuration,
+            segments: JSON.parse(JSON.stringify(segments)),
+            mappings: JSON.parse(JSON.stringify(mappings)),
+            lastUsedAt: new Date()
+          }
         });
+        console.log('TTS audio cached successfully');
+      } catch (cacheError) {
+        console.error('Failed to cache TTS audio:', cacheError);
+        // Don't fail the request if caching fails
+      }
+
+      const response: TTSResponse = {
+        audioData,
+        timings: wordTimings,
+        totalDuration,
+        segments,
+        mappings,
+        tokens,
+        tokenMappings
       };
 
-      // Synthesize speech and capture audio
-      const result = await new Promise<sdk.SpeechSynthesisResult>((resolve, reject) => {
-        synthesizer.speakSsmlAsync(
-          ssml,
-          (result) => {
-            resolve(result);
-          },
-          (error) => {
-            reject(new Error(error));
-          }
-        );
-      });
-
-      // Clean up
-      synthesizer.close();
-
-      if (result.reason === sdk.ResultReason.SynthesizingAudioCompleted) {
-        // Convert audio buffer to base64
-        const audioData = Buffer.from(result.audioData).toString('base64');
-        
-        // Calculate total duration
-        const totalDuration = wordTimings.length > 0 
-          ? Math.max(...wordTimings.map(w => w.start + w.duration))
-          : 0;
-
-        // Map TTS boundaries to our segments
-        const mappings = TTSSegmentationService.mapTTSBoundaries(segments, wordTimings);
-
-        // Generate precise tokenization
-        const tokens = TokenizationService.tokenize(text, words);
-        const tokenMappings = TokenizationService.createTokenToSegmentMapping(tokens, segments, mappings);
-
-        console.log(`TTS completed. ${wordTimings.length} boundaries, ${segments.length} segments, ${mappings.length} mappings, ${tokens.length} tokens`);
-        
-        // Debug specific problematic text
-        if (text.includes('北卡罗莱纳州')) {
-          console.log('DEBUG: Text contains 北卡罗莱纳州');
-          console.log('Tokens:', tokens.slice(0, 20).map(t => ({ text: t.text, index: t.index })));
-          console.log('Segments:', segments.slice(0, 10));
-          console.log('Token mappings:', tokenMappings.slice(0, 10));
-        }
-
-        // Cache the generated TTS
-        try {
-          await prisma.tTSCache.create({
-            data: {
-              textHash: cacheHash,
-              text,
-              voice,
-              rate,
-              audioData,
-              timings: JSON.parse(JSON.stringify(wordTimings)),
-              totalDuration,
-              segments: JSON.parse(JSON.stringify(segments)),
-              mappings: JSON.parse(JSON.stringify(mappings)),
-              lastUsedAt: new Date()
-            }
-          });
-          console.log('TTS audio cached successfully');
-        } catch (cacheError) {
-          console.error('Failed to cache TTS audio:', cacheError);
-          // Don't fail the request if caching fails
-        }
-
-        const response: TTSResponse = {
-          audioData,
-          timings: wordTimings,
-          totalDuration,
-          segments,
-          mappings,
-          tokens,
-          tokenMappings
-        };
-
-        res.json(response);
-      } else {
-        console.error('TTS synthesis failed:', result.errorDetails);
-        res.status(500).json({ error: 'Speech synthesis failed: ' + result.errorDetails });
-      }
-    } catch (error) {
-      console.error('TTS error:', error);
-      res.status(500).json({ error: error instanceof Error ? error.message : 'TTS generation failed' });
+      res.json(response);
+    } else {
+      console.error('TTS synthesis failed:', result.errorDetails);
+      res.status(500).json({ error: 'Speech synthesis failed: ' + result.errorDetails });
     }
   }
 );
@@ -276,6 +271,27 @@ router.delete('/cache/cleanup', async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Cache cleanup error:', error);
     res.status(500).json({ error: 'Failed to cleanup cache' });
+  }
+});
+
+// GET /api/tts/health - Check TTS service health
+router.get('/health', async (req: Request, res: Response) => {
+  try {
+    const healthCheck = {
+      ttsService: 'Azure Speech SDK',
+      azureKeyConfigured: !!AZURE_SPEECH_KEY,
+      azureRegion: AZURE_SPEECH_REGION,
+      sdkVersion: sdk.SpeechConfig.getVersion ? sdk.SpeechConfig.getVersion() : 'Unknown',
+      timestamp: new Date().toISOString()
+    };
+    
+    res.json(healthCheck);
+  } catch (error) {
+    console.error('TTS health check error:', error);
+    res.status(500).json({ 
+      error: 'TTS health check failed',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    });
   }
 });
 

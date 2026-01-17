@@ -1,0 +1,76 @@
+name: Setup Production Server
+
+on:
+  workflow_dispatch: # Manual trigger only - run once to setup server
+    inputs:
+      confirm:
+        description: 'Type "setup" to confirm server setup'
+        required: true
+        default: ''
+
+jobs:
+  setup:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Validate confirmation
+      if: github.event.inputs.confirm != 'setup'
+      run: |
+        echo "❌ Setup cancelled. Must type 'setup' to confirm."
+        exit 1
+    
+    - name: Setup production server
+      uses: appleboy/ssh-action@v1.0.3
+      with:
+        host: ${{ secrets.HOST }}
+        username: ${{ secrets.USERNAME }}
+        key: ${{ secrets.SSH_PRIVATE_KEY }}
+        script: |
+          echo "🚀 Setting up production server..."
+          
+          # Update system
+          echo "📦 Updating system packages..."
+          sudo apt-get update -y
+          
+          # Install Node.js 18
+          echo "📦 Installing Node.js 18..."
+          curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
+          sudo apt-get install -y nodejs
+          
+          # Verify installation
+          echo "✅ Node.js version: $(node --version)"
+          echo "✅ npm version: $(npm --version)"
+          
+          # Install PM2 globally
+          echo "📦 Installing PM2 process manager..."
+          sudo npm install -g pm2
+          
+          # Setup PM2 startup script
+          echo "🔧 Configuring PM2 startup..."
+          pm2 startup systemd -u ubuntu --hp /home/ubuntu
+          sudo env PATH=$PATH:/usr/bin /usr/lib/node_modules/pm2/bin/pm2 startup systemd -u ubuntu --hp /home/ubuntu
+          
+          # Create backend directory
+          echo "📁 Creating backend directory..."
+          mkdir -p /home/ubuntu/chinese-flashcards-backend
+          
+          # Install basic security updates
+          echo "🔒 Installing security updates..."
+          sudo apt-get upgrade -y
+          
+          # Setup firewall (optional)
+          echo "🔥 Configuring basic firewall..."
+          sudo ufw allow 22/tcp    # SSH
+          sudo ufw allow 3000/tcp  # Backend API
+          sudo ufw allow 80/tcp    # HTTP
+          sudo ufw allow 443/tcp   # HTTPS
+          sudo ufw --force enable
+          
+          echo "✅ Server setup complete!"
+          echo "📊 System info:"
+          echo "  OS: $(lsb_release -d -s)"
+          echo "  Node: $(node --version)"
+          echo "  npm: $(npm --version)"
+          echo "  PM2: $(pm2 --version)"
+          echo "  Free space: $(df -h / | awk 'NR==2{print $4}')"
+          echo "  Memory: $(free -h | awk 'NR==2{print $3"/"$2}')"
