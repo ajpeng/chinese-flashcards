@@ -395,7 +395,7 @@ export default function Articles(): React.ReactElement {
   const savedSet = useMemo(() => new Set(savedIds), [savedIds]);
   const API_URL = 'https://api.ajpeng.ca';
 
-  const { user, accessToken } = useAuth();
+  const { user, accessToken, loginWithPatreon } = useAuth();
   const navigate = useNavigate();
 
   // Get user's pinyin style preference, default to 'marks'
@@ -519,8 +519,7 @@ export default function Articles(): React.ReactElement {
 
   const markLearned = async (wordId: number): Promise<boolean> => {
     if (!user || !accessToken) {
-      alert('Please log in to save flashcards');
-      navigate('/login');
+      loginWithPatreon();
       return false;
     }
 
@@ -556,8 +555,7 @@ export default function Articles(): React.ReactElement {
 
   const unlearn = async (wordId: number): Promise<boolean> => {
     if (!user || !accessToken) {
-      alert('Please log in to manage flashcards');
-      navigate('/login');
+      loginWithPatreon();
       return false;
     }
 

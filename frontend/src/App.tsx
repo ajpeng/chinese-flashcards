@@ -4,8 +4,6 @@ import Health from './pages/Health'
 import Articles from './pages/Articles'
 import SegmentArticle from './pages/SegmentArticle'
 import SpeechPractice from './pages/SpeechPractice'
-import Login from './pages/Login'
-import Signup from './pages/Signup'
 import Settings from './pages/Settings'
 import { AuthProvider } from './contexts/AuthContext'
 import ProtectedRoute from './components/ProtectedRoute'
@@ -97,8 +95,6 @@ function Layout() {
             </ProtectedRoute>
           } />
           <Route path="/health" element={<Health />} />
-          <Route path="/login" element={<Login />} />
-          <Route path="/signup" element={<Signup />} />
         </Routes>
       </main>
     </div>

@@ -1,4 +1,3 @@
-import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 
 interface ProtectedRouteProps {
@@ -6,8 +5,7 @@ interface ProtectedRouteProps {
 }
 
 export default function ProtectedRoute({ children }: ProtectedRouteProps) {
-  const { user, loading } = useAuth();
-  const location = useLocation();
+  const { user, loading, loginWithPatreon } = useAuth();
 
   if (loading) {
     return (
@@ -18,8 +16,26 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
   }
 
   if (!user) {
-    // Redirect to login, saving the current location for post-login redirect
-    return <Navigate to="/login" state={{ from: location }} replace />;
+    return (
+      <div style={{ textAlign: 'center', padding: '60px 20px' }}>
+        <p style={{ marginBottom: 16, fontSize: '18px' }}>You need to be logged in to access this page.</p>
+        <button
+          onClick={loginWithPatreon}
+          style={{
+            backgroundColor: 'rgba(255, 66, 0, 0.85)',
+            border: 'none',
+            padding: '10px 20px',
+            borderRadius: '6px',
+            cursor: 'pointer',
+            color: '#fff',
+            fontWeight: 600,
+            fontSize: '16px',
+          }}
+        >
+          Login with Patreon
+        </button>
+      </div>
+    );
   }
 
   return <>{children}</>;

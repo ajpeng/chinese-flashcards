@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 
+
 export default function Settings(): React.ReactElement {
   const { user, accessToken, refreshUser } = useAuth();
   const navigate = useNavigate();
@@ -20,10 +21,7 @@ export default function Settings(): React.ReactElement {
   const API_URL = import.meta.env.VITE_API_URL || '';
 
   useEffect(() => {
-    if (!user) {
-      navigate('/login');
-      return;
-    }
+    if (!user) return;
 
     // Initialize form with current user data
     setPinyinStyle(user.pinyinStyle || 'marks');

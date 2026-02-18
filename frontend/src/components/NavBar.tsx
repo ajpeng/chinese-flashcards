@@ -8,7 +8,7 @@ function NavBar() {
   const location = useLocation()
   const navigate = useNavigate()
   const [theme, setTheme] = useTheme()
-  const { user, logout } = useAuth()
+  const { user, logout, loginWithPatreon } = useAuth()
   const [showSettings, setShowSettings] = useState(false)
 
   // Reset dropdown when location changes (navigation)
@@ -24,7 +24,7 @@ function NavBar() {
 
   const handleLogout = async () => {
     await logout()
-    navigate('/login')
+    navigate('/')
   }
 
   const isActive = (path: string) => location.pathname === path
@@ -87,20 +87,6 @@ function NavBar() {
             New Article
           </Link>
         )}
-        <Link
-          to="/health"
-          style={{
-            backgroundColor: isActive('/health') ? 'rgba(59, 130, 246, 0.5)' : 'transparent',
-            border: '1px solid rgba(255, 255, 255, 0.2)',
-            padding: '8px 16px',
-            borderRadius: '6px',
-            cursor: 'pointer',
-            textDecoration: 'none',
-            color: 'inherit'
-          }}
-        >
-          Health
-        </Link>
         {user ? (
           <div style={{ position: 'relative' }}>
             <button
@@ -114,7 +100,7 @@ function NavBar() {
                 color: 'inherit'
               }}
             >
-              Settings
+              {user.name || user.email}
             </button>
             {showSettings && (
               <div style={{
@@ -178,37 +164,23 @@ function NavBar() {
             )}
           </div>
         ) : (
-          <>
-            <Link
-              to="/login"
-              style={{
-                backgroundColor: isActive('/login') ? 'rgba(59, 130, 246, 0.5)' : 'transparent',
-                border: '1px solid rgba(255, 255, 255, 0.2)',
-                padding: '8px 16px',
-                borderRadius: '6px',
-                cursor: 'pointer',
-                textDecoration: 'none',
-                color: 'inherit'
-              }}
-            >
-              Login
-            </Link>
-            <Link
-              to="/signup"
-              style={{
-                backgroundColor: isActive('/signup') ? 'rgba(16, 185, 129, 0.5)' : 'rgba(16, 185, 129, 0.8)',
-                border: 'none',
-                padding: '8px 16px',
-                borderRadius: '6px',
-                cursor: 'pointer',
-                textDecoration: 'none',
-                color: 'inherit',
-                fontWeight: 600
-              }}
-            >
-              Sign Up
-            </Link>
-          </>
+          <button
+            onClick={loginWithPatreon}
+            style={{
+              backgroundColor: 'rgba(255, 66, 0, 0.85)',
+              border: 'none',
+              padding: '8px 16px',
+              borderRadius: '6px',
+              cursor: 'pointer',
+              color: '#fff',
+              fontWeight: 600,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+            }}
+          >
+            Login with Patreon
+          </button>
         )}
         <button
           aria-label="Toggle theme"

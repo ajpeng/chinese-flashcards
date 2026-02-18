@@ -13,7 +13,8 @@ datasource db {
 model User {
   id            String      @id @default(cuid())
   email         String      @unique
-  passwordHash  String
+  passwordHash  String      @default("") // empty for OAuth-only users
+  patreonId     String?     @unique       // Patreon user ID (null for legacy email/pw users)
   name          String?
   emailVerified DateTime?
   pinyinStyle   String      @default("marks") // "marks" or "numbers"
@@ -28,6 +29,7 @@ model User {
   articles      Article[]
 
   @@index([email])
+  @@index([patreonId])
 }
 
 model Article {

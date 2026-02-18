@@ -1,169 +1,154 @@
 import { Router, Request, Response } from 'express';
 import { body, validationResult } from 'express-validator';
 import prisma from '../prisma/client';
-import { hashPassword, comparePassword, validatePasswordStrength } from '../utils/password';
 import { generateAccessToken, generateRefreshToken } from '../utils/jwt';
 import { requireAuth } from '../middleware/auth';
-import { authRateLimiter } from '../middleware/rateLimit';
 
 const router = Router();
 
-// POST /api/auth/signup - Create a new user account
-router.post(
-  '/signup',
-  authRateLimiter,
-  [
-    body('email').isEmail().normalizeEmail().withMessage('Valid email is required'),
-    body('password').isString().trim().notEmpty().withMessage('Password is required'),
-    body('name').optional().isString().trim(),
-  ],
-  async (req: Request, res: Response) => {
-    try {
-      const errors = validationResult(req);
-      if (!errors.isEmpty()) {
-        res.status(400).json({ errors: errors.array() });
-        return;
+// ---------------------------------------------------------------------------
+// Patreon OAuth 2.0
+// ---------------------------------------------------------------------------
+
+// GET /api/auth/patreon – redirect user to Patreon authorisation page
+router.get('/patreon', (_req: Request, res: Response) => {
+  const clientId = process.env.PATREON_CLIENT_ID;
+  const redirectUri = process.env.PATREON_REDIRECT_URI;
+
+  if (!clientId || !redirectUri) {
+    res.status(500).json({ error: 'Patreon OAuth is not configured on the server.' });
+    return;
+  }
+
+  const params = new URLSearchParams({
+    response_type: 'code',
+    client_id: clientId,
+    redirect_uri: redirectUri,
+    scope: 'identity identity[email]',
+  });
+
+  res.redirect(`https://www.patreon.com/oauth2/authorize?${params.toString()}`);
+});
+
+// GET /api/auth/patreon/callback – Patreon redirects back here with ?code=…
+router.get('/patreon/callback', async (req: Request, res: Response) => {
+  const code = req.query.code as string | undefined;
+  const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+
+  if (!code) {
+    res.redirect(`${frontendUrl}?error=patreon_oauth_missing_code`);
+    return;
+  }
+
+  try {
+    const clientId = process.env.PATREON_CLIENT_ID!;
+    const clientSecret = process.env.PATREON_CLIENT_SECRET!;
+    const redirectUri = process.env.PATREON_REDIRECT_URI!;
+
+    // Exchange authorisation code for tokens
+    const tokenRes = await fetch('https://www.patreon.com/api/oauth2/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        code,
+        grant_type: 'authorization_code',
+        client_id: clientId,
+        client_secret: clientSecret,
+        redirect_uri: redirectUri,
+      }),
+    });
+
+    if (!tokenRes.ok) {
+      const errBody = await tokenRes.text();
+      console.error('Patreon token exchange failed:', errBody);
+      res.redirect(`${frontendUrl}?error=patreon_token_exchange_failed`);
+      return;
+    }
+
+    const tokenData = await tokenRes.json() as { access_token: string };
+
+    // Fetch the Patreon user identity
+    const identityRes = await fetch(
+      'https://www.patreon.com/api/oauth2/v2/identity?fields%5Buser%5D=email,full_name,image_url',
+      {
+        headers: { Authorization: `Bearer ${tokenData.access_token}` },
       }
+    );
 
-      const { email, password, name } = req.body;
+    if (!identityRes.ok) {
+      res.redirect(`${frontendUrl}?error=patreon_identity_failed`);
+      return;
+    }
 
-      // Validate password strength
-      const passwordValidation = validatePasswordStrength(password);
-      if (!passwordValidation.valid) {
-        res.status(400).json({ error: passwordValidation.message });
-        return;
+    const identity = await identityRes.json() as {
+      data: { id: string; attributes: { email: string; full_name: string } };
+    };
+
+    const patreonId = identity.data.id;
+    const email = identity.data.attributes.email;
+    const name = identity.data.attributes.full_name || null;
+
+    // Upsert user – find by patreonId or email, create if new
+    let user = await prisma.user.findFirst({
+      where: {
+        OR: [
+          { patreonId },
+          { email },
+        ],
+      },
+    });
+
+    if (user) {
+      // Update patreonId if not set yet (user existed via email before)
+      if (!user.patreonId) {
+        user = await prisma.user.update({
+          where: { id: user.id },
+          data: { patreonId, name: user.name || name },
+        });
       }
-
-      // Check if user already exists
-      const existingUser = await prisma.user.findUnique({
-        where: { email },
-      });
-
-      if (existingUser) {
-        res.status(409).json({ error: 'User with this email already exists' });
-        return;
-      }
-
-      // Hash password
-      const passwordHash = await hashPassword(password);
-
-      // Create user
-      const user = await prisma.user.create({
+    } else {
+      user = await prisma.user.create({
         data: {
           email,
-          passwordHash,
-          name: name || null,
-        },
-        select: {
-          id: true,
-          email: true,
-          name: true,
-          pinyinStyle: true,
-          fontSize: true,
-          speechRate: true,
-          voiceName: true,
-          createdAt: true,
+          name,
+          patreonId,
+          passwordHash: '', // not used for OAuth users
         },
       });
-
-      // Generate tokens
-      const accessToken = generateAccessToken({ userId: user.id, email: user.email });
-      const refreshToken = generateRefreshToken({ userId: user.id, email: user.email });
-
-      // Set refresh token in httpOnly cookie
-      res.cookie('refreshToken', refreshToken, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'strict',
-        maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
-      });
-
-      res.status(201).json({
-        user,
-        accessToken,
-      });
-    } catch (error) {
-      // eslint-disable-next-line no-console
-      console.error('Error creating user', error);
-      res.status(500).json({ error: 'Failed to create user' });
     }
+
+    // Issue our own JWT and redirect to frontend with token in query param
+    const accessToken = generateAccessToken({ userId: user.id, email: user.email });
+    const refreshToken = generateRefreshToken({ userId: user.id, email: user.email });
+
+    res.cookie('refreshToken', refreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
+    });
+
+    // Send the access token to the frontend via URL query param.
+    // The frontend AuthContext detects ?token= on mount and stores it.
+    const basePath = process.env.FRONTEND_BASE_PATH || '/chinese-flashcards';
+    res.redirect(`${frontendUrl}${basePath}/?token=${encodeURIComponent(accessToken)}`);
+  } catch (error) {
+    console.error('Patreon OAuth callback error:', error);
+    res.redirect(`${frontendUrl}?error=patreon_oauth_error`);
   }
-);
+});
 
-// POST /api/auth/login - Login with email and password
-router.post(
-  '/login',
-  authRateLimiter,
-  [
-    body('email').isEmail().normalizeEmail().withMessage('Valid email is required'),
-    body('password').isString().notEmpty().withMessage('Password is required'),
-  ],
-  async (req: Request, res: Response) => {
-    try {
-      const errors = validationResult(req);
-      if (!errors.isEmpty()) {
-        res.status(400).json({ errors: errors.array() });
-        return;
-      }
+// ---------------------------------------------------------------------------
+// Shared endpoints (logout, me, refresh, settings)
+// ---------------------------------------------------------------------------
 
-      const { email, password } = req.body;
-
-      // Find user
-      const user = await prisma.user.findUnique({
-        where: { email },
-      });
-
-      if (!user) {
-        res.status(401).json({ error: 'Invalid email or password' });
-        return;
-      }
-
-      // Verify password
-      const isPasswordValid = await comparePassword(password, user.passwordHash);
-      if (!isPasswordValid) {
-        res.status(401).json({ error: 'Invalid email or password' });
-        return;
-      }
-
-      // Generate tokens
-      const accessToken = generateAccessToken({ userId: user.id, email: user.email });
-      const refreshToken = generateRefreshToken({ userId: user.id, email: user.email });
-
-      // Set refresh token in httpOnly cookie
-      res.cookie('refreshToken', refreshToken, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'strict',
-        maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
-      });
-
-      res.json({
-        user: {
-          id: user.id,
-          email: user.email,
-          name: user.name,
-          pinyinStyle: user.pinyinStyle,
-          fontSize: user.fontSize,
-          speechRate: user.speechRate,
-          createdAt: user.createdAt,
-        },
-        accessToken,
-      });
-    } catch (error) {
-      // eslint-disable-next-line no-console
-      console.error('Error logging in', error);
-      res.status(500).json({ error: 'Failed to login' });
-    }
-  }
-);
-
-// POST /api/auth/logout - Clear refresh token cookie
+// POST /api/auth/logout – clear refresh token cookie
 router.post('/logout', (_req: Request, res: Response) => {
   res.clearCookie('refreshToken');
   res.json({ message: 'Logged out successfully' });
 });
 
-// GET /api/auth/me - Get current user info
+// GET /api/auth/me – get current user info
 router.get('/me', requireAuth, async (req: Request, res: Response) => {
   try {
     if (!req.user) {
@@ -193,13 +178,12 @@ router.get('/me', requireAuth, async (req: Request, res: Response) => {
 
     res.json(user);
   } catch (error) {
-    // eslint-disable-next-line no-console
     console.error('Error fetching user', error);
     res.status(500).json({ error: 'Failed to fetch user' });
   }
 });
 
-// POST /api/auth/refresh - Get new access token using refresh token
+// POST /api/auth/refresh – get new access token using refresh token cookie
 router.post('/refresh', async (req: Request, res: Response) => {
   try {
     const refreshToken = req.cookies?.refreshToken;
@@ -209,7 +193,6 @@ router.post('/refresh', async (req: Request, res: Response) => {
       return;
     }
 
-    // Verify refresh token and get new access token
     const { verifyToken } = await import('../utils/jwt');
     const payload = verifyToken(refreshToken);
 
@@ -221,16 +204,16 @@ router.post('/refresh', async (req: Request, res: Response) => {
   }
 });
 
-// PATCH /api/auth/settings - Update user settings
+// PATCH /api/auth/settings – update user settings
 router.patch(
   '/settings',
   requireAuth,
   [
-    body('pinyinStyle').optional().isIn(['marks', 'numbers']).withMessage('pinyinStyle must be "marks" or "numbers"'),
-    body('fontSize').optional().isIn(['small', 'medium', 'large', 'xlarge']).withMessage('fontSize must be "small", "medium", "large", or "xlarge"'),
-    body('speechRate').optional().isFloat({ min: 0.5, max: 2.0 }).toFloat().withMessage('Invalid speech rate value'),
+    body('pinyinStyle').optional().isIn(['marks', 'numbers']),
+    body('fontSize').optional().isIn(['small', 'medium', 'large', 'xlarge']),
+    body('speechRate').optional().isFloat({ min: 0.5, max: 2.0 }).toFloat(),
     body('voiceName').optional({ nullable: true }).isString().trim(),
-    body('textVariant').optional().isIn(['simplified', 'traditional']).withMessage('textVariant must be "simplified" or "traditional"'),
+    body('textVariant').optional().isIn(['simplified', 'traditional']),
     body('name').optional({ nullable: true }).isString().trim(),
   ],
   async (req: Request, res: Response) => {
@@ -246,24 +229,10 @@ router.patch(
         return;
       }
 
-      const updates: { pinyinStyle?: string; fontSize?: string; name?: string, speechRate?: number, voiceName?: string, textVariant?: string } = {};
-      if (req.body.pinyinStyle !== undefined) {
-        updates.pinyinStyle = req.body.pinyinStyle;
-      }
-      if (req.body.fontSize !== undefined) {
-        updates.fontSize = req.body.fontSize;
-      }
-      if (req.body.speechRate !== undefined) {
-        updates.speechRate = req.body.speechRate;
-      }
-      if (req.body.voiceName !== undefined) {
-        updates.voiceName = req.body.voiceName;
-      }
-      if (req.body.textVariant !== undefined) {
-        updates.textVariant = req.body.textVariant;
-      }
-      if (req.body.name !== undefined) {
-        updates.name = req.body.name;
+      const updates: Record<string, unknown> = {};
+      const fields = ['pinyinStyle', 'fontSize', 'speechRate', 'voiceName', 'textVariant', 'name'] as const;
+      for (const field of fields) {
+        if (req.body[field] !== undefined) updates[field] = req.body[field];
       }
 
       const user = await prisma.user.update({
@@ -284,7 +253,6 @@ router.patch(
 
       res.json(user);
     } catch (error) {
-      // eslint-disable-next-line no-console
       console.error('Error updating settings', error);
       res.status(500).json({ error: 'Failed to update settings' });
     }

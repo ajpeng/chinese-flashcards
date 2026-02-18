@@ -19,8 +19,7 @@ interface AuthContextType {
   user: User | null;
   accessToken: string | null;
   loading: boolean;
-  login: (email: string, password: string) => Promise<void>;
-  signup: (email: string, password: string, name?: string) => Promise<void>;
+  loginWithPatreon: () => void;
   logout: () => Promise<void>;
   refreshAuth: () => Promise<void>;
   refreshUser: () => Promise<void>;
@@ -56,7 +55,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setUser(userData);
           setAccessToken(storedToken);
         } else {
-          // Token is invalid, clear it
           localStorage.removeItem('accessToken');
         }
       } catch (error) {
@@ -70,46 +68,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     loadUser();
   }, []);
 
-  const login = async (email: string, password: string) => {
-    const response = await fetch(`${API_URL}/api/auth/login`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      credentials: 'include',
-      body: JSON.stringify({ email, password }),
-    });
+  // Handle OAuth callback token in URL (after redirect back from Patreon)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const token = params.get('token');
+    if (token) {
+      localStorage.setItem('accessToken', token);
+      setAccessToken(token);
+      // Remove token from URL without reloading
+      const url = new URL(window.location.href);
+      url.searchParams.delete('token');
+      window.history.replaceState({}, '', url.toString());
 
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.error || 'Login failed');
+      // Load user data with this token
+      fetch(`${API_URL}/api/auth/me`, {
+        headers: { Authorization: `Bearer ${token}` },
+        credentials: 'include',
+      })
+        .then((r) => r.json())
+        .then((userData) => setUser(userData))
+        .catch((err) => console.error('Failed to load user after OAuth:', err));
     }
+  }, []);
 
-    const data = await response.json();
-    setUser(data.user);
-    setAccessToken(data.accessToken);
-    localStorage.setItem('accessToken', data.accessToken);
-  };
-
-  const signup = async (email: string, password: string, name?: string) => {
-    const response = await fetch(`${API_URL}/api/auth/signup`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      credentials: 'include',
-      body: JSON.stringify({ email, password, name }),
-    });
-
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.error || 'Signup failed');
-    }
-
-    const data = await response.json();
-    setUser(data.user);
-    setAccessToken(data.accessToken);
-    localStorage.setItem('accessToken', data.accessToken);
+  const loginWithPatreon = () => {
+    window.location.href = `${API_URL}/api/auth/patreon`;
   };
 
   const logout = async () => {
@@ -139,7 +122,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setAccessToken(data.accessToken);
         localStorage.setItem('accessToken', data.accessToken);
       } else {
-        // Refresh failed, clear auth state
         setUser(null);
         setAccessToken(null);
         localStorage.removeItem('accessToken');
@@ -179,8 +161,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         user,
         accessToken,
         loading,
-        login,
-        signup,
+        loginWithPatreon,
         logout,
         refreshAuth,
         refreshUser,

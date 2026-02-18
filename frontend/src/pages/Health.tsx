@@ -35,7 +35,6 @@ export default function Health(): React.ReactElement {
 
   return (
     <div>
-      <h2>Health Check</h2>
       <div style={{ marginBottom: 12 }}>
         <button onClick={fetchHealth} disabled={loading}>
           {loading ? 'Refreshing...' : 'Refresh'}
