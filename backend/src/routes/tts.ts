@@ -281,7 +281,7 @@ router.get('/health', async (req: Request, res: Response) => {
       ttsService: 'Azure Speech SDK',
       azureKeyConfigured: !!AZURE_SPEECH_KEY,
       azureRegion: AZURE_SPEECH_REGION,
-      sdkVersion: sdk.SpeechConfig.getVersion ? sdk.SpeechConfig.getVersion() : 'Unknown',
+      sdkVersion: (sdk.SpeechConfig as any).getVersion ? (sdk.SpeechConfig as any).getVersion() : 'Unknown',
       timestamp: new Date().toISOString()
     };
     
