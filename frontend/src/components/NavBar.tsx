@@ -200,19 +200,21 @@ function NavBar() {
             style={{
               backgroundColor: 'transparent',
               border: '1px solid rgba(255, 255, 255, 0.2)',
-              padding: '8px 12px',
+              padding: '8px 16px',
               borderRadius: '6px',
               cursor: 'pointer',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              height: '40px'
+              height: '40px',
+              minWidth: '44px'
             }}
           >
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 569 546" width="20" height="20" aria-hidden="true">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 569 546" width="16" height="16" aria-hidden="true" style={{ marginRight: '6px' }}>
               <circle cx="363" cy="205" r="205" fill="#FF424D" />
               <rect x="0" y="0" width="112" height="546" fill="#052D49" />
             </svg>
+            Login
           </button>
         )}
         <button
@@ -228,7 +230,9 @@ function NavBar() {
             height: '40px',
             display: 'flex',
             alignItems: 'center',
-            fontSize: '18px'
+            justifyContent: 'center',
+            fontSize: '18px',
+            minWidth: '44px'
           }}
         >
           {theme === 'light' ? '☀️' : theme === 'dark' ? '🌙' : '💻'}
