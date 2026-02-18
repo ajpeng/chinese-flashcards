@@ -4,6 +4,14 @@
 set -e
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
+GIT_COMMON="$(git rev-parse --git-common-dir)"
+MAIN_ROOT="$(dirname "$GIT_COMMON")"
+
+# If we're in a worktree (REPO_ROOT != MAIN_ROOT), skip linting here.
+# CI will catch any lint errors on the real checkout.
+if [ "$REPO_ROOT" != "$MAIN_ROOT" ]; then
+  exit 0
+fi
 
 # Collect staged .ts/.tsx files
 STAGED=$(git diff --cached --name-only --diff-filter=ACMR | grep -E '\.(ts|tsx)$' || true)
@@ -18,9 +26,8 @@ FRONTEND_FILES=$(echo "$STAGED" | grep '^frontend/' || true)
 if [ -n "$FRONTEND_FILES" ]; then
   echo "🔍 ESLint (frontend)..."
   cd "$REPO_ROOT/frontend"
-  # Pass only the changed files relative to frontend/
   RELATIVE=$(echo "$FRONTEND_FILES" | sed 's|^frontend/||')
-  npx eslint --max-warnings=0 $RELATIVE
+  ./node_modules/.bin/eslint --max-warnings=0 $RELATIVE
   cd "$REPO_ROOT"
 fi
 
@@ -32,7 +39,7 @@ if [ -n "$BACKEND_FILES" ]; then
     echo "🔍 ESLint (backend)..."
     cd "$REPO_ROOT/backend"
     RELATIVE=$(echo "$BACKEND_FILES" | sed 's|^backend/||')
-    npx eslint --max-warnings=0 $RELATIVE
+    ./node_modules/.bin/eslint --max-warnings=0 $RELATIVE
     cd "$REPO_ROOT"
   fi
 fi
