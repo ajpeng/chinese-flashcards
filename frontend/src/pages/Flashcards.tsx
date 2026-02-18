@@ -50,7 +50,7 @@ const HSK_LABELS: Record<number, string> = {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function Flashcards() {
-  const { user, accessToken, loginWithPatreon } = useAuth();
+  const { user, accessToken, loading, loginWithPatreon } = useAuth();
   const pinyinStyle = user?.pinyinStyle ?? 'marks';
 
   // Deck selection
@@ -164,6 +164,14 @@ export default function Flashcards() {
 
   // ─── Render ─────────────────────────────────────────────────────────────────
 
+  if (loading) {
+    return (
+      <div style={{ textAlign: 'center', padding: '80px 24px', color: 'var(--muted-color)' }}>
+        Loading…
+      </div>
+    );
+  }
+
   if (!user) {
     return (
       <div style={{ textAlign: 'center', padding: '80px 24px' }}>
@@ -175,17 +183,22 @@ export default function Flashcards() {
         <button
           onClick={loginWithPatreon}
           style={{
-            backgroundColor: 'rgba(255, 66, 0, 0.85)',
+            backgroundColor: 'transparent',
             border: 'none',
-            padding: '12px 28px',
+            padding: '4px',
             borderRadius: '8px',
             cursor: 'pointer',
-            color: '#fff',
-            fontWeight: 600,
-            fontSize: 16,
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
           }}
+          title="Login with Patreon"
+          aria-label="Login with Patreon"
         >
-          Login with Patreon
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 569 546" width="56" height="56" aria-hidden="true">
+            <circle cx="363" cy="205" r="205" fill="#FF424D" />
+            <rect x="0" y="0" width="112" height="546" fill="#052D49" />
+          </svg>
         </button>
       </div>
     );

@@ -146,3 +146,7 @@ jobs:
           # Run word regeneration script (one-time migration)
           echo "Regenerating article words with updated filtering logic..."
           docker exec chinese-backend npm run regenerate-words || echo "Word regeneration skipped or failed"
+
+          # Seed HSK words (idempotent – skips words that already exist)
+          echo "Seeding HSK vocabulary..."
+          docker exec chinese-backend npm run seed:hsk || echo "HSK seed skipped or failed"
