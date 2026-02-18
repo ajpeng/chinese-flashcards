@@ -125,12 +125,6 @@ export default function SpeechPractice(): React.ReactElement {
     '谢谢你的帮助，我很感激。',
   ];
 
-  const selectExampleText = (text: string) => {
-    setPracticeText(text);
-    setTranscriptionResult('');
-    setRecordedAudioUrl('');
-  };
-
   return (
     <div style={{ maxWidth: 960 }}>
       <h2>🎤 Speech Practice</h2>
