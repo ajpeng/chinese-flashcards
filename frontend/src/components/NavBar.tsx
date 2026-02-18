@@ -58,6 +58,20 @@ function NavBar() {
           Articles
         </Link>
         <Link
+          to="/flashcards"
+          style={{
+            backgroundColor: isActive('/flashcards') ? 'rgba(16, 185, 129, 0.5)' : 'transparent',
+            border: '1px solid rgba(255, 255, 255, 0.2)',
+            padding: '8px 16px',
+            borderRadius: '6px',
+            cursor: 'pointer',
+            textDecoration: 'none',
+            color: 'inherit'
+          }}
+        >
+          Flashcards
+        </Link>
+        <Link
           to="/speech-practice"
           style={{
             backgroundColor: isActive('/speech-practice') ? 'rgba(139, 69, 19, 0.5)' : 'transparent',

@@ -16,7 +16,8 @@
 		"prisma:seed": "prisma db seed",
 		"prisma:push": "prisma db push",
 		"postinstall": "prisma generate",
-		"test": "jest --passWithNoTests"
+		"test": "jest --passWithNoTests",
+		"seed:hsk": "ts-node src/scripts/seed-hsk-words.ts"
 	},
 	"prisma": {
 		"seed": "node prisma/seed.js"

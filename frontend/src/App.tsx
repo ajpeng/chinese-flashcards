@@ -5,6 +5,7 @@ import Articles from './pages/Articles'
 import SegmentArticle from './pages/SegmentArticle'
 import SpeechPractice from './pages/SpeechPractice'
 import Settings from './pages/Settings'
+import Flashcards from './pages/Flashcards'
 import { AuthProvider } from './contexts/AuthContext'
 import ProtectedRoute from './components/ProtectedRoute'
 import NavBar from './components/NavBar'
@@ -94,6 +95,7 @@ function Layout() {
               <Settings />
             </ProtectedRoute>
           } />
+          <Route path="/flashcards" element={<Flashcards />} />
           <Route path="/health" element={<Health />} />
         </Routes>
       </main>
