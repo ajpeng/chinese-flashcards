@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { convertPinyinStyle } from '../utils/pinyin';
 
-const API_URL = 'https://api.ajpeng.ca';
+const API_URL = import.meta.env.VITE_API_URL || 'https://api.ajpeng.ca';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -50,7 +50,7 @@ const HSK_LABELS: Record<number, string> = {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function Flashcards() {
-  const { user, accessToken, loading, loginWithPatreon } = useAuth();
+  const { user, accessToken, loading } = useAuth();
   const pinyinStyle = user?.pinyinStyle ?? 'marks';
 
   // Deck selection
@@ -168,38 +168,6 @@ export default function Flashcards() {
     return (
       <div style={{ textAlign: 'center', padding: '80px 24px', color: 'var(--muted-color)' }}>
         Loading…
-      </div>
-    );
-  }
-
-  if (!user) {
-    return (
-      <div style={{ textAlign: 'center', padding: '80px 24px' }}>
-        <div style={{ fontSize: 48, marginBottom: 16 }}>🃏</div>
-        <h2 style={{ marginBottom: 8 }}>HSK Flashcards</h2>
-        <p style={{ color: 'var(--muted-color)', marginBottom: 32 }}>
-          Log in to study spaced repetition flashcards for HSK levels 1–6.
-        </p>
-        <button
-          onClick={loginWithPatreon}
-          style={{
-            backgroundColor: 'transparent',
-            border: 'none',
-            padding: '4px',
-            borderRadius: '8px',
-            cursor: 'pointer',
-            display: 'inline-flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}
-          title="Login with Patreon"
-          aria-label="Login with Patreon"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 569 546" width="56" height="56" aria-hidden="true">
-            <circle cx="363" cy="205" r="205" fill="#FF424D" />
-            <rect x="0" y="0" width="112" height="546" fill="#052D49" />
-          </svg>
-        </button>
       </div>
     );
   }
