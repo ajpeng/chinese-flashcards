@@ -1,6 +1,5 @@
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { useNavigate } from 'react-router-dom';
 import { convertPinyinStyle } from '../utils/pinyin';
 import { convertChineseText } from '../utils/chinese-conversion';
 
@@ -396,8 +395,6 @@ export default function Articles(): React.ReactElement {
   const API_URL = 'https://api.ajpeng.ca';
 
   const { user, accessToken, loginWithPatreon } = useAuth();
-  const navigate = useNavigate();
-
   // Get user's pinyin style preference, default to 'marks'
   const pinyinStyle = user?.pinyinStyle || 'marks';
 
