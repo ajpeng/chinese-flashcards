@@ -1,0 +1,40 @@
+#!/bin/sh
+# Pre-commit hook: run ESLint on staged files. Blocks commit on lint errors.
+
+set -e
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+
+# Collect staged .ts/.tsx files
+STAGED=$(git diff --cached --name-only --diff-filter=ACMR | grep -E '\.(ts|tsx)$' || true)
+
+if [ -z "$STAGED" ]; then
+  exit 0
+fi
+
+# ── Frontend lint ────────────────────────────────────────────────────────────
+FRONTEND_FILES=$(echo "$STAGED" | grep '^frontend/' || true)
+
+if [ -n "$FRONTEND_FILES" ]; then
+  echo "🔍 ESLint (frontend)..."
+  cd "$REPO_ROOT/frontend"
+  # Pass only the changed files relative to frontend/
+  RELATIVE=$(echo "$FRONTEND_FILES" | sed 's|^frontend/||')
+  npx eslint --max-warnings=0 $RELATIVE
+  cd "$REPO_ROOT"
+fi
+
+# ── Backend lint ─────────────────────────────────────────────────────────────
+BACKEND_FILES=$(echo "$STAGED" | grep '^backend/src/' || true)
+
+if [ -n "$BACKEND_FILES" ]; then
+  if [ -f "$REPO_ROOT/backend/.eslintrc.json" ] || [ -f "$REPO_ROOT/backend/eslint.config.js" ] || [ -f "$REPO_ROOT/backend/eslint.config.mjs" ]; then
+    echo "🔍 ESLint (backend)..."
+    cd "$REPO_ROOT/backend"
+    RELATIVE=$(echo "$BACKEND_FILES" | sed 's|^backend/||')
+    npx eslint --max-warnings=0 $RELATIVE
+    cd "$REPO_ROOT"
+  fi
+fi
+
+echo "✅ ESLint passed"
