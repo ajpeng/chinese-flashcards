@@ -1,0 +1,27 @@
+name: Check Auth Logs
+
+on:
+  workflow_dispatch:
+
+jobs:
+  logs:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Fetch docker logs and env check
+      uses: appleboy/ssh-action@v1.0.3
+      with:
+        host: ${{ secrets.EC2_HOST }}
+        username: ubuntu
+        key: ${{ secrets.EC2_SSH_KEY }}
+        script: |
+          echo "=== Recent backend logs (last 100 lines) ==="
+          docker logs chinese-backend --tail 100 2>&1
+
+          echo ""
+          echo "=== Auth-related env vars (redacted) ==="
+          docker exec chinese-backend sh -c '
+            echo "FRONTEND_URL=$FRONTEND_URL"
+            echo "FRONTEND_BASE_PATH=${FRONTEND_BASE_PATH:-<not set, defaults to /chinese-flashcards>}"
+            echo "PATREON_REDIRECT_URI=$PATREON_REDIRECT_URI"
+            echo "PATREON_CLIENT_ID=${PATREON_CLIENT_ID:0:8}... (redacted)"
+          '
