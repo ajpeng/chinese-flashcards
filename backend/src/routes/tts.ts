@@ -124,9 +124,8 @@ router.post(
       </speak>
     `;
 
-    // Use pull audio output stream to capture audio data
-    const pullStreamConfig = sdk.AudioConfig.fromDefaultSpeakerOutput();
-    const synthesizer = new sdk.SpeechSynthesizer(speechConfig, pullStreamConfig);
+    // Use null audio config - audio data is captured from the result object directly
+    const synthesizer = new sdk.SpeechSynthesizer(speechConfig, undefined);
 
     const wordTimings: WordTiming[] = [];
 
