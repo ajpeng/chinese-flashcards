@@ -22,9 +22,9 @@ jobs:
     - name: Setup production server
       uses: appleboy/ssh-action@v1.0.3
       with:
-        host: ${{ secrets.HOST }}
-        username: ${{ secrets.USERNAME }}
-        key: ${{ secrets.SSH_PRIVATE_KEY }}
+        host: ${{ secrets.EC2_HOST }}
+        username: ${{ secrets.EC2_USER }}
+        key: ${{ secrets.EC2_SSH_KEY }}
         script: |
           echo "🚀 Setting up production server..."
           
@@ -66,6 +66,10 @@ jobs:
           sudo ufw allow 443/tcp   # HTTPS
           sudo ufw --force enable
           
+          # Setup weekly Docker cleanup cron job
+          echo "🧹 Setting up Docker cleanup cron job..."
+          (crontab -l 2>/dev/null | grep -v 'docker system prune'; echo "0 3 * * 0 docker system prune -f --filter 'until=168h' >> /var/log/docker-prune.log 2>&1") | crontab -
+
           echo "✅ Server setup complete!"
           echo "📊 System info:"
           echo "  OS: $(lsb_release -d -s)"
