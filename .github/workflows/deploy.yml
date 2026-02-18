@@ -129,6 +129,9 @@ jobs:
             -e DATABASE_URL="${{ secrets.DATABASE_URL }}" \
             -e JWT_SECRET="${{ secrets.JWT_SECRET }}" \
             -e FRONTEND_URL="${{ secrets.FRONTEND_URL }}" \
+            -e PATREON_CLIENT_ID="${{ secrets.PATREON_CLIENT_ID }}" \
+            -e PATREON_CLIENT_SECRET="${{ secrets.PATREON_CLIENT_SECRET }}" \
+            -e PATREON_REDIRECT_URI="${{ secrets.PATREON_REDIRECT_URI }}" \
             -e NODE_ENV=production \
             -e PORT=3001 \
             --restart unless-stopped \
