@@ -39,7 +39,7 @@ function NavBar() {
       backgroundColor: 'rgba(0, 0, 0, 0.2)'
     }}>
       <Link to="/" style={{ display: 'flex', alignItems: 'center', gap: 12, textDecoration: 'none', color: 'inherit' }}>
-        <span style={{ fontSize: '32px' }}>中</span>
+        <span style={{ fontSize: '28px', lineHeight: 1 }}>中</span>
         <h1 style={{ margin: 0, fontSize: '24px', fontWeight: 600 }}>Chinese Flashcards</h1>
       </Link>
       <nav style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
@@ -52,10 +52,13 @@ function NavBar() {
             borderRadius: '6px',
             cursor: 'pointer',
             textDecoration: 'none',
-            color: 'inherit'
+            color: 'inherit',
+            height: '40px',
+            display: 'flex',
+            alignItems: 'center'
           }}
         >
-          Articles
+          <span style={{ fontSize: '18px', marginRight: '6px' }}>📚</span> Articles
         </Link>
         <Link
           to="/flashcards"
@@ -66,10 +69,13 @@ function NavBar() {
             borderRadius: '6px',
             cursor: 'pointer',
             textDecoration: 'none',
-            color: 'inherit'
+            color: 'inherit',
+            height: '40px',
+            display: 'flex',
+            alignItems: 'center'
           }}
         >
-          Flashcards
+          <span style={{ fontSize: '18px', marginRight: '6px' }}>🃏</span> Flashcards
         </Link>
         <Link
           to="/speech-practice"
@@ -80,10 +86,13 @@ function NavBar() {
             borderRadius: '6px',
             cursor: 'pointer',
             textDecoration: 'none',
-            color: 'inherit'
+            color: 'inherit',
+            height: '40px',
+            display: 'flex',
+            alignItems: 'center'
           }}
         >
-          🎤 Speech Practice
+          <span style={{ fontSize: '18px', marginRight: '6px' }}>🎤</span> Speech Practice
         </Link>
         {user && (
           <Link
@@ -95,10 +104,13 @@ function NavBar() {
               borderRadius: '6px',
               cursor: 'pointer',
               textDecoration: 'none',
-              color: 'inherit'
+              color: 'inherit',
+              height: '40px',
+              display: 'flex',
+              alignItems: 'center'
             }}
           >
-            New Article
+            <span style={{ fontSize: '18px', marginRight: '6px' }}>✏️</span> New Article
           </Link>
         )}
         {user ? (
@@ -111,7 +123,10 @@ function NavBar() {
                 borderRadius: '6px',
                 cursor: 'pointer',
                 backgroundColor: 'transparent',
-                color: 'inherit'
+                color: 'inherit',
+                height: '40px',
+                display: 'flex',
+                alignItems: 'center'
               }}
             >
               {user.name || user.email}
@@ -149,7 +164,7 @@ function NavBar() {
                     e.currentTarget.style.backgroundColor = 'transparent';
                   }}
                 >
-                  Settings
+                  <span style={{ fontSize: '16px', marginRight: '6px' }}>⚙️</span> Settings
                 </Link>
                 <button
                   onClick={handleLogout}
@@ -172,7 +187,7 @@ function NavBar() {
                     e.currentTarget.style.backgroundColor = 'transparent';
                   }}
                 >
-                  Logout
+                  <span style={{ fontSize: '16px', marginRight: '6px' }}>🚪</span> Logout
                 </button>
               </div>
             )}
@@ -184,16 +199,17 @@ function NavBar() {
             aria-label="Login with Patreon"
             style={{
               backgroundColor: 'transparent',
-              border: 'none',
-              padding: '4px',
+              border: '1px solid rgba(255, 255, 255, 0.2)',
+              padding: '8px 12px',
               borderRadius: '6px',
               cursor: 'pointer',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
+              height: '40px'
             }}
           >
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 569 546" width="32" height="32" aria-hidden="true">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 569 546" width="20" height="20" aria-hidden="true">
               <circle cx="363" cy="205" r="205" fill="#FF424D" />
               <rect x="0" y="0" width="112" height="546" fill="#052D49" />
             </svg>
@@ -208,7 +224,11 @@ function NavBar() {
             padding: '8px 16px',
             borderRadius: '6px',
             cursor: 'pointer',
-            backgroundColor: 'transparent'
+            backgroundColor: 'transparent',
+            height: '40px',
+            display: 'flex',
+            alignItems: 'center',
+            fontSize: '18px'
           }}
         >
           {theme === 'light' ? '☀️' : theme === 'dark' ? '🌙' : '💻'}
