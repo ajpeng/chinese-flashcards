@@ -34,9 +34,11 @@ router.get('/patreon', (_req: Request, res: Response) => {
 router.get('/patreon/callback', async (req: Request, res: Response) => {
   const code = req.query.code as string | undefined;
   const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+  const basePath = process.env.FRONTEND_BASE_PATH || '/chinese-flashcards';
+  const frontendBase = `${frontendUrl}${basePath}`;
 
   if (!code) {
-    res.redirect(`${frontendUrl}?error=patreon_oauth_missing_code`);
+    res.redirect(`${frontendBase}?error=patreon_oauth_missing_code`);
     return;
   }
 
@@ -61,7 +63,7 @@ router.get('/patreon/callback', async (req: Request, res: Response) => {
     if (!tokenRes.ok) {
       const errBody = await tokenRes.text();
       console.error('Patreon token exchange failed:', errBody);
-      res.redirect(`${frontendUrl}?error=patreon_token_exchange_failed`);
+      res.redirect(`${frontendBase}?error=patreon_token_exchange_failed`);
       return;
     }
 
@@ -76,7 +78,7 @@ router.get('/patreon/callback', async (req: Request, res: Response) => {
     );
 
     if (!identityRes.ok) {
-      res.redirect(`${frontendUrl}?error=patreon_identity_failed`);
+      res.redirect(`${frontendBase}?error=patreon_identity_failed`);
       return;
     }
 
@@ -130,11 +132,10 @@ router.get('/patreon/callback', async (req: Request, res: Response) => {
 
     // Send the access token to the frontend via URL query param.
     // The frontend AuthContext detects ?token= on mount and stores it.
-    const basePath = process.env.FRONTEND_BASE_PATH || '/chinese-flashcards';
-    res.redirect(`${frontendUrl}${basePath}/?token=${encodeURIComponent(accessToken)}`);
+    res.redirect(`${frontendBase}/?token=${encodeURIComponent(accessToken)}`);
   } catch (error) {
     console.error('Patreon OAuth callback error:', error);
-    res.redirect(`${frontendUrl}?error=patreon_oauth_error`);
+    res.redirect(`${frontendBase}?error=patreon_oauth_error`);
   }
 });
 
