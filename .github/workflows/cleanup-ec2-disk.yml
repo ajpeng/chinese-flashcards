@@ -17,20 +17,23 @@ jobs:
           echo "=== Disk before cleanup ==="
           df -h /
 
+          echo "=== Top disk consumers ==="
+          sudo du -sh /* 2>/dev/null | sort -rh | head -20
+
           echo "=== Docker disk usage ==="
-          docker system df
+          docker system df -v
 
-          echo "=== Pruning stopped containers, dangling images, unused networks ==="
-          docker system prune -f
-
-          echo "=== Removing unused Docker images (keeping latest) ==="
-          docker image prune -af
-
-          echo "=== Clearing old apt cache ==="
+          echo "=== Stop container, prune all images, restart ==="
+          docker stop chinese-backend || true
+          docker system prune -af --volumes
           sudo apt-get clean
-
-          echo "=== Clearing old logs ==="
           sudo journalctl --vacuum-time=3d
+          sudo find /tmp -type f -atime +7 -delete 2>/dev/null || true
+          sudo find /var/log -name "*.gz" -delete 2>/dev/null || true
+          sudo find /var/log -name "*.1" -delete 2>/dev/null || true
 
           echo "=== Disk after cleanup ==="
           df -h /
+
+          echo "=== Restarting backend (will re-pull image on next deploy) ==="
+          echo "NOTE: backend is stopped - trigger a deploy to restart it"
