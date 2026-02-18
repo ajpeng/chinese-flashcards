@@ -180,20 +180,23 @@ function NavBar() {
         ) : (
           <button
             onClick={loginWithPatreon}
+            title="Login with Patreon"
+            aria-label="Login with Patreon"
             style={{
-              backgroundColor: 'rgba(255, 66, 0, 0.85)',
+              backgroundColor: 'transparent',
               border: 'none',
-              padding: '8px 16px',
+              padding: '4px',
               borderRadius: '6px',
               cursor: 'pointer',
-              color: '#fff',
-              fontWeight: 600,
               display: 'flex',
               alignItems: 'center',
-              gap: 6,
+              justifyContent: 'center',
             }}
           >
-            Login with Patreon
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 569 546" width="32" height="32" aria-hidden="true">
+              <circle cx="363" cy="205" r="205" fill="#FF424D" />
+              <rect x="0" y="0" width="112" height="546" fill="#052D49" />
+            </svg>
           </button>
         )}
         <button
