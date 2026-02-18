@@ -1,0 +1,36 @@
+name: EC2 Disk Cleanup
+
+on:
+  workflow_dispatch:
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Free disk space on EC2
+      uses: appleboy/ssh-action@v1.0.3
+      with:
+        host: ${{ secrets.EC2_HOST }}
+        username: ubuntu
+        key: ${{ secrets.EC2_SSH_KEY }}
+        script: |
+          echo "=== Disk before cleanup ==="
+          df -h /
+
+          echo "=== Docker disk usage ==="
+          docker system df
+
+          echo "=== Pruning stopped containers, dangling images, unused networks ==="
+          docker system prune -f
+
+          echo "=== Removing unused Docker images (keeping latest) ==="
+          docker image prune -af
+
+          echo "=== Clearing old apt cache ==="
+          sudo apt-get clean
+
+          echo "=== Clearing old logs ==="
+          sudo journalctl --vacuum-time=3d
+
+          echo "=== Disk after cleanup ==="
+          df -h /
