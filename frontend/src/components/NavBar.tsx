@@ -193,8 +193,8 @@ function NavBar() {
             )}
           </div>
         ) : (
-          <button
-            onClick={loginWithPatreon}
+          <a
+            href={`${(import.meta as any).env.VITE_API_URL || 'https://api.ajpeng.ca'}/api/auth/patreon`}
             title="Login with Patreon"
             aria-label="Login with Patreon"
             style={{
@@ -207,7 +207,9 @@ function NavBar() {
               alignItems: 'center',
               justifyContent: 'center',
               height: '40px',
-              minWidth: '44px'
+              minWidth: '44px',
+              textDecoration: 'none',
+              color: 'inherit'
             }}
           >
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 569 546" width="16" height="16" aria-hidden="true" style={{ marginRight: '6px' }}>
@@ -215,12 +217,20 @@ function NavBar() {
               <rect x="0" y="0" width="112" height="546" fill="#052D49" />
             </svg>
             Login
-          </button>
+          </a>
         )}
-        <button
-          aria-label="Toggle theme"
+        <a
+          href="#toggle-theme"
+          role="button"
+          aria-label={`Theme: ${theme}`}
           title={`Theme: ${theme}`}
-          onClick={cycleTheme}
+          onClick={(e) => { e.preventDefault(); cycleTheme(); }}
+          onKeyDown={(e) => {
+            if ((e as React.KeyboardEvent).key === 'Enter' || (e as React.KeyboardEvent).key === ' ' || (e as React.KeyboardEvent).key === 'Spacebar') {
+              e.preventDefault();
+              cycleTheme();
+            }
+          }}
           style={{
             border: '1px solid rgba(255, 255, 255, 0.2)',
             padding: '8px 16px',
@@ -232,11 +242,13 @@ function NavBar() {
             alignItems: 'center',
             justifyContent: 'center',
             fontSize: '18px',
-            minWidth: '44px'
+            minWidth: '44px',
+            textDecoration: 'none',
+            color: 'inherit'
           }}
         >
           {theme === 'light' ? '☀️' : theme === 'dark' ? '🌙' : '💻'}
-        </button>
+        </a>
       </nav>
     </header>
   )
