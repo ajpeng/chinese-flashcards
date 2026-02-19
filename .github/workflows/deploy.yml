@@ -169,20 +169,10 @@ jobs:
           echo "🗄️ Running migrations..."
           docker exec chinese-backend ./node_modules/.bin/prisma migrate deploy
 
-          # Run word regeneration script (one-time migration)
-          echo "Regenerating article words with updated filtering logic..."
-          docker exec chinese-backend npm run regenerate-words || echo "Word regeneration skipped or failed"
+          # Remove duplicate HSK words (keep only lowest-level copy of each word)
+          echo "🔁 Deduplicating HSK words across levels..."
+          docker exec chinese-backend npm run dedup:hsk:prod
 
-          # Remove duplicate HSK words (words that appear in multiple levels — keep lowest level only)
-          echo "Deduplicating HSK words across levels..."
-          docker exec chinese-backend node -e "
-            const { Pool } = require('pg');
-            const pool = new Pool({ connectionString: process.env.DATABASE_URL });
-            pool.query(\`DELETE FROM \"Word\" w WHERE w.source = 'hsk' AND w.\"hskLevel\" > 1 AND EXISTS (SELECT 1 FROM \"Word\" w2 WHERE w2.source = 'hsk' AND w2.simplified = w.simplified AND w2.\"hskLevel\" < w.\"hskLevel\")\`)
-              .then(r => { console.log('Deleted', r.rowCount, 'duplicate HSK words'); pool.end(); })
-              .catch(e => { console.error('Dedup error:', e.message); pool.end(); process.exit(1); });
-          " || echo "HSK dedup skipped or failed"
-
-          # Seed HSK words (idempotent – skips words that already exist, only inserts level-unique words)
-          echo "Seeding HSK vocabulary..."
-          docker exec chinese-backend npm run seed:hsk || echo "HSK seed skipped or failed"
+          # Seed HSK words (idempotent — skips words that already exist)
+          echo "🌱 Seeding HSK vocabulary..."
+          docker exec chinese-backend npm run seed:hsk:prod

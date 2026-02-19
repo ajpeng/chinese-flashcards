@@ -17,7 +17,10 @@
 		"prisma:push": "prisma db push",
 		"postinstall": "prisma generate",
 		"test": "jest --passWithNoTests",
-		"seed:hsk": "ts-node -r dotenv/config src/scripts/seed-hsk-words.ts"
+		"seed:hsk": "ts-node -r dotenv/config src/scripts/seed-hsk-words.ts",
+		"seed:hsk:prod": "node -r dotenv/config dist/scripts/seed-hsk-words.js",
+		"dedup:hsk": "ts-node -r dotenv/config src/scripts/dedup-hsk-words.ts",
+		"dedup:hsk:prod": "node -r dotenv/config dist/scripts/dedup-hsk-words.js"
 	},
 	"prisma": {
 		"seed": "node prisma/seed.js"
