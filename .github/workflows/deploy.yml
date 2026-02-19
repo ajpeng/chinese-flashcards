@@ -143,6 +143,10 @@ jobs:
           sleep 5
           curl -f http://localhost:3001/health || echo "Health check failed"
 
+          # Run database migrations
+          echo "🗄️ Running migrations..."
+          docker exec chinese-backend ./node_modules/.bin/prisma migrate deploy
+
           # Run word regeneration script (one-time migration)
           echo "Regenerating article words with updated filtering logic..."
           docker exec chinese-backend npm run regenerate-words || echo "Word regeneration skipped or failed"
