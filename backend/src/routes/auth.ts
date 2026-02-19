@@ -260,4 +260,35 @@ router.patch(
   }
 );
 
+// GET /api/auth/dev-login – instant login for local development only
+router.get('/dev-login', async (_req: Request, res: Response) => {
+  if (process.env.NODE_ENV === 'production') {
+    res.status(403).json({ error: 'Not available in production' });
+    return;
+  }
+
+  try {
+    const user = await prisma.user.upsert({
+      where: { email: 'dev@localhost' },
+      create: { email: 'dev@localhost', name: 'Dev User', passwordHash: '' },
+      update: {},
+    });
+
+    const accessToken = generateAccessToken({ userId: user.id, email: user.email });
+    const refreshToken = generateRefreshToken({ userId: user.id, email: user.email });
+
+    res.cookie('refreshToken', refreshToken, {
+      httpOnly: true,
+      secure: false,
+      sameSite: 'lax',
+      maxAge: 30 * 24 * 60 * 60 * 1000,
+    });
+
+    res.json({ accessToken });
+  } catch (error) {
+    console.error('Dev login error:', error);
+    res.status(500).json({ error: 'Dev login failed' });
+  }
+});
+
 export default router;

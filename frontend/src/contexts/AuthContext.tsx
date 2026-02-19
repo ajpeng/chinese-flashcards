@@ -20,6 +20,7 @@ interface AuthContextType {
   accessToken: string | null;
   loading: boolean;
   loginWithPatreon: () => void;
+  devLogin: () => Promise<void>;
   logout: () => Promise<void>;
   refreshAuth: () => Promise<void>;
   refreshUser: () => Promise<void>;
@@ -95,6 +96,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     window.location.href = `${API_URL}/api/auth/patreon`;
   };
 
+  const devLogin = async () => {
+    try {
+      const res = await fetch(`${API_URL}/api/auth/dev-login`, { credentials: 'include' });
+      if (!res.ok) throw new Error('Dev login failed');
+      const { accessToken: token } = await res.json();
+      localStorage.setItem('accessToken', token);
+      setAccessToken(token);
+      const userRes = await fetch(`${API_URL}/api/auth/me`, {
+        headers: { Authorization: `Bearer ${token}` },
+        credentials: 'include',
+      });
+      if (userRes.ok) setUser(await userRes.json());
+    } catch (err) {
+      console.error('Dev login error:', err);
+    }
+  };
+
   const logout = async () => {
     try {
       await fetch(`${API_URL}/api/auth/logout`, {
@@ -162,6 +180,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         accessToken,
         loading,
         loginWithPatreon,
+        devLogin,
         logout,
         refreshAuth,
         refreshUser,
