@@ -118,6 +118,23 @@ button:focus-visible {
   --pinyin-color: rgba(255, 255, 255, 0.7);
 }
 
+/* ── Layout ──────────────────────────────────────────────────────────────── */
+.main-content {
+  padding: 24px 32px;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+@media (max-width: 600px) {
+  .main-content {
+    padding: 16px 12px;
+  }
+
+  .card {
+    padding: 12px;
+  }
+}
+
 @media (prefers-color-scheme: light) {
   :root {
     --text-color: #213547;

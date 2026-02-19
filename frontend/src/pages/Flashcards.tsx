@@ -230,8 +230,8 @@ export default function Flashcards() {
 
   if (view === 'study' && cardFace === 'done') {
     return (
-      <div style={{ maxWidth: 480, margin: '80px auto', textAlign: 'center', padding: '0 24px' }}>
-        <div style={{ fontSize: 64, marginBottom: 16 }}>🎉</div>
+      <div style={{ maxWidth: 480, margin: '40px auto', textAlign: 'center', padding: '0 16px' }}>
+        <div style={{ fontSize: 56, marginBottom: 16 }}>🎉</div>
         <h2 style={{ marginBottom: 8 }}>Session Complete!</h2>
         <p style={{ color: 'var(--muted-color)', marginBottom: 24 }}>HSK Level {studyLevel}</p>
         <div
@@ -239,27 +239,27 @@ export default function Flashcards() {
             background: 'var(--bg-color, rgba(255,255,255,0.05))',
             border: '1px solid var(--border-color)',
             borderRadius: 12,
-            padding: '24px 32px',
+            padding: '20px 16px',
             marginBottom: 32,
             display: 'flex',
             justifyContent: 'space-around',
           }}
         >
           <div>
-            <div style={{ fontSize: 40, fontWeight: 700 }}>{sessionTotal}</div>
-            <div style={{ color: 'var(--muted-color)', fontSize: 14 }}>Cards reviewed</div>
+            <div style={{ fontSize: 36, fontWeight: 700 }}>{sessionTotal}</div>
+            <div style={{ color: 'var(--muted-color)', fontSize: 13 }}>Reviewed</div>
           </div>
           <div>
-            <div style={{ fontSize: 40, fontWeight: 700, color: 'rgba(16, 185, 129, 0.9)' }}>
+            <div style={{ fontSize: 36, fontWeight: 700, color: 'rgba(16, 185, 129, 0.9)' }}>
               {sessionCorrect}
             </div>
-            <div style={{ color: 'var(--muted-color)', fontSize: 14 }}>Correct</div>
+            <div style={{ color: 'var(--muted-color)', fontSize: 13 }}>Correct</div>
           </div>
           <div>
-            <div style={{ fontSize: 40, fontWeight: 700, color: 'rgba(220, 38, 38, 0.9)' }}>
+            <div style={{ fontSize: 36, fontWeight: 700, color: 'rgba(220, 38, 38, 0.9)' }}>
               {sessionTotal - sessionCorrect}
             </div>
-            <div style={{ color: 'var(--muted-color)', fontSize: 14 }}>Again</div>
+            <div style={{ color: 'var(--muted-color)', fontSize: 13 }}>Again</div>
           </div>
         </div>
         <button
@@ -289,14 +289,15 @@ export default function Flashcards() {
     const levelColor = HSK_COLORS[studyLevel];
 
     return (
-      <div style={{ maxWidth: 560, margin: '40px auto', padding: '0 24px' }}>
+      <div style={{ maxWidth: 560, margin: '24px auto', padding: '0 16px' }}>
         {/* Header */}
         <div
           style={{
             display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'center',
-            marginBottom: 24,
+            marginBottom: 16,
+            gap: 8,
           }}
         >
           <button
@@ -304,16 +305,17 @@ export default function Flashcards() {
             style={{
               background: 'transparent',
               border: '1px solid var(--border-color)',
-              padding: '6px 14px',
+              padding: '6px 12px',
               borderRadius: 6,
               cursor: 'pointer',
               color: 'inherit',
               fontSize: 14,
+              flexShrink: 0,
             }}
           >
             ← Decks
           </button>
-          <span style={{ color: 'var(--muted-color)', fontSize: 14 }}>
+          <span style={{ color: 'var(--muted-color)', fontSize: 13, textAlign: 'center', minWidth: 0 }}>
             HSK {studyLevel} · {progress}
           </span>
           <span
@@ -321,6 +323,7 @@ export default function Flashcards() {
               fontSize: 12,
               padding: '4px 10px',
               borderRadius: 20,
+              flexShrink: 0,
               backgroundColor: currentCard.isNew ? 'rgba(16, 185, 129, 0.15)' : 'rgba(59, 130, 246, 0.15)',
               color: currentCard.isNew ? 'rgba(16, 185, 129, 1)' : 'rgba(59, 130, 246, 1)',
             }}
@@ -335,7 +338,7 @@ export default function Flashcards() {
             height: 4,
             background: 'var(--border-color)',
             borderRadius: 2,
-            marginBottom: 32,
+            marginBottom: 20,
             overflow: 'hidden',
           }}
         >
@@ -356,23 +359,23 @@ export default function Flashcards() {
             background: 'var(--bg-color, rgba(255,255,255,0.03))',
             border: '1px solid var(--border-color)',
             borderRadius: 16,
-            padding: '48px 32px',
+            padding: '32px 20px',
             textAlign: 'center',
-            minHeight: 240,
+            minHeight: 200,
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'center',
             justifyContent: 'center',
-            gap: 16,
+            gap: 12,
           }}
         >
           {/* Chinese characters */}
-          <div style={{ fontSize: 72, lineHeight: 1.1, fontWeight: 500 }}>
+          <div style={{ fontSize: 'clamp(48px, 15vw, 72px)', lineHeight: 1.1, fontWeight: 500 }}>
             {currentCard.simplified}
           </div>
 
           {/* Pinyin */}
-          <div style={{ fontSize: 24, color: levelColor, fontStyle: 'italic' }}>
+          <div style={{ fontSize: 'clamp(16px, 5vw, 24px)', color: levelColor, fontStyle: 'italic' }}>
             {displayPinyin}
           </div>
 
@@ -381,12 +384,12 @@ export default function Flashcards() {
             <div
               style={{
                 marginTop: 8,
-                fontSize: 18,
+                fontSize: 'clamp(14px, 4vw, 18px)',
                 color: 'var(--text-color)',
-                maxWidth: 400,
+                maxWidth: 360,
                 lineHeight: 1.5,
                 borderTop: '1px solid var(--border-color)',
-                paddingTop: 20,
+                paddingTop: 16,
               }}
             >
               {currentCard.english || '—'}
@@ -395,7 +398,7 @@ export default function Flashcards() {
         </div>
 
         {/* Buttons */}
-        <div style={{ marginTop: 24 }}>
+        <div style={{ marginTop: 20 }}>
           {cardFace === 'front' ? (
             <button
               onClick={() => setCardFace('back')}
@@ -457,26 +460,27 @@ export default function Flashcards() {
   if (view === 'preview') {
     const levelColor = HSK_COLORS[previewLevel];
     return (
-      <div style={{ maxWidth: 640, margin: '0 auto', padding: '0 24px' }}>
+      <div style={{ maxWidth: 640, margin: '0 auto', padding: '0 16px' }}>
         {/* Header */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 24, paddingTop: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20, paddingTop: 8 }}>
           <button
             onClick={() => { setView('decks'); setPreviewCards([]); }}
             style={{
               background: 'transparent',
               border: '1px solid var(--border-color)',
-              padding: '6px 14px',
+              padding: '6px 12px',
               borderRadius: 6,
               cursor: 'pointer',
               color: 'inherit',
               fontSize: 14,
               whiteSpace: 'nowrap',
+              flexShrink: 0,
             }}
           >
             ← Decks
           </button>
-          <div>
-            <div style={{ fontWeight: 600, fontSize: 16 }}>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontWeight: 600, fontSize: 15, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
               HSK {previewLevel} · {HSK_LABELS[previewLevel]}
             </div>
             <div style={{ fontSize: 13, color: 'var(--muted-color)' }}>
@@ -491,44 +495,45 @@ export default function Flashcards() {
             <div
               key={card.wordId}
               style={{
-                display: 'flex',
+                display: 'grid',
+                gridTemplateColumns: 'auto 1fr auto',
                 alignItems: 'center',
-                justifyContent: 'space-between',
+                gap: '0 10px',
                 background: 'var(--bg-color, rgba(255,255,255,0.03))',
                 border: '1px solid var(--border-color)',
                 borderRadius: 10,
-                padding: '12px 16px',
-                gap: 12,
+                padding: '10px 12px',
               }}
             >
-              {/* Chinese + pinyin */}
-              <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, minWidth: 0 }}>
-                <span style={{ fontSize: 28, fontWeight: 500, color: levelColor, flexShrink: 0 }}>
-                  {card.simplified}
-                </span>
-                <span style={{ fontSize: 14, color: 'var(--muted-color)', fontStyle: 'italic', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {/* Chinese character */}
+              <span style={{ fontSize: 24, fontWeight: 500, color: levelColor, lineHeight: 1.2 }}>
+                {card.simplified}
+              </span>
+
+              {/* Pinyin + English stacked */}
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontSize: 12, color: 'var(--muted-color)', fontStyle: 'italic' }}>
                   {convertPinyinStyle(card.pinyin, pinyinStyle)}
-                </span>
+                </div>
+                <div style={{ fontSize: 13, color: 'var(--text-color)', marginTop: 2 }}>
+                  {card.english || '—'}
+                </div>
               </div>
 
-              {/* English + badge */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
-                <span style={{ fontSize: 14, color: 'var(--text-color)', textAlign: 'right' }}>
-                  {card.english || '—'}
-                </span>
-                <span
-                  style={{
-                    fontSize: 11,
-                    padding: '2px 8px',
-                    borderRadius: 20,
-                    whiteSpace: 'nowrap',
-                    backgroundColor: card.isNew ? 'rgba(16, 185, 129, 0.15)' : 'rgba(59, 130, 246, 0.15)',
-                    color: card.isNew ? 'rgba(16, 185, 129, 1)' : 'rgba(59, 130, 246, 1)',
-                  }}
-                >
-                  {card.isNew ? 'New' : `${card.interval}d`}
-                </span>
-              </div>
+              {/* Badge */}
+              <span
+                style={{
+                  fontSize: 11,
+                  padding: '2px 7px',
+                  borderRadius: 20,
+                  whiteSpace: 'nowrap',
+                  alignSelf: 'center',
+                  backgroundColor: card.isNew ? 'rgba(16, 185, 129, 0.15)' : 'rgba(59, 130, 246, 0.15)',
+                  color: card.isNew ? 'rgba(16, 185, 129, 1)' : 'rgba(59, 130, 246, 1)',
+                }}
+              >
+                {card.isNew ? 'New' : `${card.interval}d`}
+              </span>
             </div>
           ))}
         </div>
@@ -539,9 +544,9 @@ export default function Flashcards() {
   // ── Deck selection ─────────────────────────────────────────────────────────
 
   return (
-    <div style={{ maxWidth: 800, margin: '0 auto', padding: '0 24px' }}>
+    <div style={{ maxWidth: 800, margin: '0 auto', padding: '0 16px' }}>
       <h2 style={{ marginBottom: 8 }}>HSK Flashcard Decks</h2>
-      <p style={{ color: 'var(--muted-color)', marginBottom: 32 }}>
+      <p style={{ color: 'var(--muted-color)', marginBottom: 24 }}>
         Spaced repetition study for all HSK vocabulary levels.
       </p>
 
@@ -567,8 +572,8 @@ export default function Flashcards() {
         <div
           style={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))',
-            gap: 16,
+            gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 220px), 1fr))',
+            gap: 12,
           }}
         >
           {[1, 2, 3, 4, 5, 6].map(level => {
@@ -589,18 +594,18 @@ export default function Flashcards() {
                   background: 'var(--bg-color, rgba(255,255,255,0.03))',
                   border: `1px solid var(--border-color)`,
                   borderRadius: 12,
-                  padding: '20px',
+                  padding: '16px',
                   display: 'flex',
                   flexDirection: 'column',
-                  gap: 12,
+                  gap: 10,
                 }}
               >
                 {/* Level header */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                   <div
                     style={{
-                      width: 36,
-                      height: 36,
+                      width: 34,
+                      height: 34,
                       borderRadius: 8,
                       backgroundColor: color,
                       display: 'flex',
@@ -608,13 +613,14 @@ export default function Flashcards() {
                       justifyContent: 'center',
                       color: '#fff',
                       fontWeight: 700,
-                      fontSize: 16,
+                      fontSize: 15,
+                      flexShrink: 0,
                     }}
                   >
                     {level}
                   </div>
-                  <div>
-                    <div style={{ fontWeight: 600, fontSize: 15 }}>HSK Level {level}</div>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontWeight: 600, fontSize: 14 }}>HSK Level {level}</div>
                     <div style={{ fontSize: 12, color: 'var(--muted-color)' }}>
                       {HSK_LABELS[level]}
                     </div>
@@ -622,7 +628,7 @@ export default function Flashcards() {
                 </div>
 
                 {/* Stats */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
                   <div
                     style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}
                   >
@@ -665,38 +671,42 @@ export default function Flashcards() {
                 </div>
 
                 {/* Buttons */}
-                <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+                <div style={{ display: 'flex', gap: 8, marginTop: 2 }}>
                   <button
                     onClick={() => startStudy(level)}
                     disabled={!canStudy || studyLoading}
                     style={{
                       flex: 1,
-                      padding: '10px',
+                      padding: '9px 6px',
                       backgroundColor: canStudy ? color : 'rgba(128, 128, 128, 0.3)',
                       border: 'none',
                       borderRadius: 8,
                       cursor: canStudy && !studyLoading ? 'pointer' : 'not-allowed',
                       color: canStudy ? '#fff' : 'var(--muted-color)',
                       fontWeight: 600,
-                      fontSize: 14,
+                      fontSize: 13,
                       opacity: studyLoading ? 0.7 : 1,
+                      whiteSpace: 'nowrap',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
                     }}
                   >
-                    {studyLoading ? 'Loading…' : deck.dueCards > 0 ? `Study (${deck.dueCards} due)` : 'Study'}
+                    {studyLoading ? 'Loading…' : deck.dueCards > 0 ? `Study (${deck.dueCards})` : 'Study'}
                   </button>
                   <button
                     onClick={() => startPreview(level)}
                     disabled={!canStudy || previewLoading}
                     title="Browse all words"
                     style={{
-                      padding: '10px 12px',
+                      padding: '9px 12px',
                       backgroundColor: 'transparent',
                       border: `1px solid var(--border-color)`,
                       borderRadius: 8,
                       cursor: canStudy && !previewLoading ? 'pointer' : 'not-allowed',
                       color: canStudy ? 'var(--text-color)' : 'var(--muted-color)',
-                      fontSize: 14,
+                      fontSize: 13,
                       opacity: previewLoading ? 0.7 : 1,
+                      flexShrink: 0,
                     }}
                   >
                     Browse

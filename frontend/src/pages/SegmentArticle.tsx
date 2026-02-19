@@ -114,7 +114,7 @@ export default function SegmentArticle({
   };
 
   return (
-    <div style={{ maxWidth: 960 }}>
+    <div style={{ maxWidth: 960, padding: '0 4px' }}>
       <h2>New Article</h2>
       <p>Paste Chinese text below to analyze and optionally save as a new article.</p>
       {error && (
@@ -219,6 +219,7 @@ export default function SegmentArticle({
                 fontFamily: 'inherit',
                 border: '1px solid #ccc',
                 borderRadius: 4,
+                maxWidth: '100%',
               }}
             >
               <option value={1}>HSK 1</option>

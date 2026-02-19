@@ -6,10 +6,10 @@
 		"prod": "node dist/bin/www.js",
 		"dev": "ts-node-dev --respawn --transpile-only src/bin/www.ts",
 		"build": "prisma generate && tsc",
-		"regenerate-words": "ts-node src/scripts/regenerate-article-words.ts",
-		"normalize-pinyin": "ts-node src/scripts/normalize-pinyin.ts",
-		"lookup-words": "ts-node src/scripts/lookup-missing-words.ts",
-		"apply-lookups": "ts-node src/scripts/apply-word-lookups.ts",
+		"regenerate-words": "ts-node -r dotenv/config src/scripts/regenerate-article-words.ts",
+		"normalize-pinyin": "ts-node -r dotenv/config src/scripts/normalize-pinyin.ts",
+		"lookup-words": "ts-node -r dotenv/config src/scripts/lookup-missing-words.ts",
+		"apply-lookups": "ts-node -r dotenv/config src/scripts/apply-word-lookups.ts",
 		"prisma:dev": "prisma migrate dev",
 		"prisma:migrate": "prisma migrate deploy",
 		"prisma:generate": "prisma generate",
@@ -17,7 +17,7 @@
 		"prisma:push": "prisma db push",
 		"postinstall": "prisma generate",
 		"test": "jest --passWithNoTests",
-		"seed:hsk": "ts-node src/scripts/seed-hsk-words.ts"
+		"seed:hsk": "ts-node -r dotenv/config src/scripts/seed-hsk-words.ts"
 	},
 	"prisma": {
 		"seed": "node prisma/seed.js"

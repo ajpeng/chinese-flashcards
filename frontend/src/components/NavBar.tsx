@@ -2,7 +2,7 @@ import React from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import useTheme from '../theme'
 import { useAuth } from '../contexts/AuthContext'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 
 function NavBar() {
   const location = useLocation()
@@ -10,11 +10,26 @@ function NavBar() {
   const [theme, setTheme] = useTheme()
   const { user, logout } = useAuth()
   const [showSettings, setShowSettings] = useState(false)
+  const [menuOpen, setMenuOpen] = useState(false)
+  const menuRef = useRef<HTMLDivElement>(null)
 
-  // Reset dropdown when location changes (navigation)
+  // Reset dropdowns when location changes
   useEffect(() => {
     setShowSettings(false)
+    setMenuOpen(false)
   }, [location.pathname])
+
+  // Close mobile menu / settings dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setMenuOpen(false)
+        setShowSettings(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
 
   const cycleTheme = () => {
     if (theme === 'light') setTheme('dark')
@@ -29,175 +44,313 @@ function NavBar() {
 
   const isActive = (path: string) => location.pathname === path
 
-  const baseButtonStyle: React.CSSProperties = {
-    border: '1px solid rgba(255, 255, 255, 0.2)',
-    padding: '8px 16px',
-    borderRadius: '6px',
-    cursor: 'pointer',
-    backgroundColor: 'transparent',
-    color: 'inherit',
-    textDecoration: 'none',
-    display: 'inline-flex',
-    alignItems: 'center',
-    gap: 6,
-    minHeight: '40px',
-  }
-
   const activeBg = 'rgba(59, 130, 246, 0.2)'
 
-  return (
-    <header
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: 16,
-        padding: '16px 32px',
-        borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
-        backgroundColor: 'rgba(0, 0, 0, 0.2)'
-      }}
-    >
-      <Link to="/" style={{ display: 'flex', alignItems: 'center', gap: 12, textDecoration: 'none', color: 'inherit' }}>
-        <span style={{ fontSize: '28px', lineHeight: 1 }}>中</span>
-        <h1 style={{ margin: 0, fontSize: '24px', fontWeight: 600 }}>Chinese Flashcards</h1>
+  const navLinkStyle = (path: string): React.CSSProperties => ({
+    display: 'flex',
+    alignItems: 'center',
+    gap: 8,
+    padding: '10px 14px',
+    borderRadius: '6px',
+    textDecoration: 'none',
+    color: 'inherit',
+    backgroundColor: isActive(path) ? activeBg : 'transparent',
+    fontSize: 15,
+    whiteSpace: 'nowrap',
+  })
+
+  const navLinks = (
+    <>
+      <Link to="/articles" style={navLinkStyle('/articles')}>
+        <span style={{ fontSize: 17 }}>📚</span> Articles
       </Link>
+      <Link to="/flashcards" style={navLinkStyle('/flashcards')}>
+        <span style={{ fontSize: 17 }}>🃏</span> Flashcards
+      </Link>
+      <Link to="/speech-practice" style={navLinkStyle('/speech-practice')}>
+        <span style={{ fontSize: 17 }}>🎤</span> Speech Practice
+      </Link>
+      {user && (
+        <Link to="/new" style={navLinkStyle('/new')}>
+          <span style={{ fontSize: 17 }}>✏️</span> New Article
+        </Link>
+      )}
+    </>
+  )
 
-      <nav style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
-        <Link
-          to="/articles"
-          aria-current={isActive('/articles') ? 'page' : undefined}
-          style={{ ...baseButtonStyle, backgroundColor: isActive('/articles') ? activeBg : 'transparent' }}
-        >
-          <span style={{ fontSize: '18px' }}>📚</span> Articles
+  return (
+    <>
+      {/* Inject responsive styles */}
+      <style>{`
+        .navbar-desktop-nav { display: flex; }
+        .navbar-hamburger { display: none; }
+        .navbar-mobile-menu { display: none; }
+
+        @media (max-width: 700px) {
+          .navbar-desktop-nav { display: none; }
+          .navbar-hamburger { display: flex; }
+          .navbar-mobile-menu.open { display: flex; }
+          .navbar-title { display: none; }
+        }
+      `}</style>
+
+      <header
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 12,
+          padding: '12px 16px',
+          borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
+          backgroundColor: 'rgba(0, 0, 0, 0.2)',
+          position: 'relative',
+          zIndex: 100,
+        }}
+      >
+        {/* Logo */}
+        <Link to="/" style={{ display: 'flex', alignItems: 'center', gap: 10, textDecoration: 'none', color: 'inherit', flexShrink: 0 }}>
+          <span style={{ fontSize: 26, lineHeight: 1 }}>中</span>
+          <h1 className="navbar-title" style={{ margin: 0, fontSize: 20, fontWeight: 600 }}>Chinese Flashcards</h1>
         </Link>
 
-        <Link
-          to="/flashcards"
-          aria-current={isActive('/flashcards') ? 'page' : undefined}
-          style={{ ...baseButtonStyle, backgroundColor: isActive('/flashcards') ? activeBg : 'transparent' }}
-        >
-          <span style={{ fontSize: '18px' }}>🃏</span> Flashcards
-        </Link>
+        {/* Desktop nav links */}
+        <nav className="navbar-desktop-nav" style={{ marginLeft: 'auto', gap: 4, alignItems: 'center' }}>
+          {navLinks}
 
-        <Link
-          to="/speech-practice"
-          aria-current={isActive('/speech-practice') ? 'page' : undefined}
-          style={{ ...baseButtonStyle, backgroundColor: isActive('/speech-practice') ? activeBg : 'transparent' }}
-        >
-          <span style={{ fontSize: '18px' }}>🎤</span> Speech Practice
-        </Link>
-
-        {user && (
-          <Link
-            to="/new"
-            aria-current={isActive('/new') ? 'page' : undefined}
-            style={{ ...baseButtonStyle, backgroundColor: isActive('/new') ? activeBg : 'transparent' }}
+          {/* Theme toggle */}
+          <button
+            type="button"
+            aria-label={`Theme: ${theme}`}
+            title={`Theme: ${theme}`}
+            onClick={cycleTheme}
+            style={{
+              border: '1px solid rgba(255,255,255,0.2)',
+              padding: '8px 12px',
+              borderRadius: 6,
+              cursor: 'pointer',
+              backgroundColor: 'transparent',
+              color: 'inherit',
+              fontSize: 17,
+              display: 'flex',
+              alignItems: 'center',
+              minHeight: 40,
+            }}
           >
-            <span style={{ fontSize: '18px' }}>✏️</span> New Article
-          </Link>
-        )}
+            {theme === 'light' ? '☀️' : theme === 'dark' ? '🌙' : '💻'}
+          </button>
 
-        {user ? (
-          <div style={{ position: 'relative' }}>
-            <button
-              type="button"
-              aria-haspopup="true"
-              aria-expanded={showSettings}
-              aria-controls="settings-menu"
-              onClick={() => setShowSettings(!showSettings)}
-              style={{ ...baseButtonStyle }}
-            >
-              {user.name || user.email}
-            </button>
-            {showSettings && (
-              <div
-                id="settings-menu"
-                role="menu"
+          {/* User menu / Login */}
+          {user ? (
+            <div style={{ position: 'relative' }}>
+              <button
+                type="button"
+                aria-haspopup="true"
+                aria-expanded={showSettings}
+                aria-controls="settings-menu"
+                onClick={() => setShowSettings(s => !s)}
                 style={{
-                  position: 'absolute',
-                  top: 'calc(100% + 4px)',
-                  right: 0,
-                  backgroundColor: 'var(--bg-color, white)',
-                  border: '1px solid var(--border-color)',
-                  borderRadius: '8px',
-                  padding: '8px 0',
+                  border: '1px solid rgba(255,255,255,0.2)',
+                  padding: '8px 14px',
+                  borderRadius: 6,
+                  cursor: 'pointer',
+                  backgroundColor: 'transparent',
+                  color: 'inherit',
                   display: 'flex',
-                  flexDirection: 'column',
-                  minWidth: '120px',
-                  boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
-                  zIndex: 1000
+                  alignItems: 'center',
+                  gap: 6,
+                  minHeight: 40,
+                  maxWidth: 180,
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                  fontSize: 14,
                 }}
               >
+                {user.name || user.email}
+              </button>
+              {showSettings && (
+                <div
+                  id="settings-menu"
+                  role="menu"
+                  style={{
+                    position: 'absolute',
+                    top: 'calc(100% + 4px)',
+                    right: 0,
+                    backgroundColor: 'var(--bg-color, white)',
+                    border: '1px solid var(--border-color)',
+                    borderRadius: 8,
+                    padding: '8px 0',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    minWidth: 140,
+                    boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                    zIndex: 1000,
+                  }}
+                >
+                  <Link
+                    to="/settings"
+                    role="menuitem"
+                    style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 16px', textDecoration: 'none', color: 'inherit', borderRadius: 4, margin: '2px 4px' }}
+                    onMouseEnter={e => { e.currentTarget.style.backgroundColor = 'rgba(100,108,255,0.1)' }}
+                    onMouseLeave={e => { e.currentTarget.style.backgroundColor = 'transparent' }}
+                  >
+                    <span style={{ fontSize: 16 }}>⚙️</span> Settings
+                  </Link>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={handleLogout}
+                    style={{ display: 'flex', alignItems: 'center', gap: 6, border: 'none', padding: '8px 16px', backgroundColor: 'transparent', color: 'inherit', textAlign: 'left', cursor: 'pointer', borderRadius: 4, margin: '2px 4px', fontSize: 14 }}
+                    onMouseEnter={e => { e.currentTarget.style.backgroundColor = 'rgba(220,38,38,0.1)' }}
+                    onMouseLeave={e => { e.currentTarget.style.backgroundColor = 'transparent' }}
+                  >
+                    <span style={{ fontSize: 16 }}>🚪</span> Logout
+                  </button>
+                </div>
+              )}
+            </div>
+          ) : (
+            <a
+              href={`${(import.meta as any).env.VITE_API_URL || 'https://api.ajpeng.ca'}/api/auth/patreon`}
+              title="Login with Patreon"
+              aria-label="Login with Patreon"
+              style={{
+                border: '1px solid rgba(255,255,255,0.2)',
+                padding: '8px 14px',
+                borderRadius: 6,
+                cursor: 'pointer',
+                backgroundColor: 'transparent',
+                color: 'inherit',
+                textDecoration: 'none',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+                minHeight: 40,
+                fontSize: 14,
+              }}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 569 546" width="15" height="15" aria-hidden="true">
+                <circle cx="363" cy="205" r="205" fill="#FF424D" />
+                <rect x="0" y="0" width="112" height="546" fill="#052D49" />
+              </svg>
+              Login
+            </a>
+          )}
+        </nav>
+
+        {/* Mobile right side: theme + hamburger */}
+        <div className="navbar-hamburger" style={{ marginLeft: 'auto', alignItems: 'center', gap: 8 }} ref={menuRef}>
+          {/* Theme toggle */}
+          <button
+            type="button"
+            aria-label={`Theme: ${theme}`}
+            onClick={cycleTheme}
+            style={{
+              border: '1px solid rgba(255,255,255,0.2)',
+              padding: '8px 10px',
+              borderRadius: 6,
+              cursor: 'pointer',
+              backgroundColor: 'transparent',
+              color: 'inherit',
+              fontSize: 17,
+              display: 'flex',
+              alignItems: 'center',
+            }}
+          >
+            {theme === 'light' ? '☀️' : theme === 'dark' ? '🌙' : '💻'}
+          </button>
+
+          {/* Hamburger button */}
+          <button
+            type="button"
+            aria-label={menuOpen ? 'Close menu' : 'Open menu'}
+            aria-expanded={menuOpen}
+            onClick={() => setMenuOpen(o => !o)}
+            style={{
+              border: '1px solid rgba(255,255,255,0.2)',
+              padding: '8px 10px',
+              borderRadius: 6,
+              cursor: 'pointer',
+              backgroundColor: menuOpen ? activeBg : 'transparent',
+              color: 'inherit',
+              display: 'flex',
+              flexDirection: 'column',
+              justifyContent: 'center',
+              gap: 4,
+              width: 40,
+              height: 40,
+            }}
+          >
+            <span style={{ display: 'block', width: 18, height: 2, backgroundColor: 'currentColor', borderRadius: 2, transition: 'transform 0.2s', transform: menuOpen ? 'translateY(6px) rotate(45deg)' : 'none' }} />
+            <span style={{ display: 'block', width: 18, height: 2, backgroundColor: 'currentColor', borderRadius: 2, opacity: menuOpen ? 0 : 1, transition: 'opacity 0.2s' }} />
+            <span style={{ display: 'block', width: 18, height: 2, backgroundColor: 'currentColor', borderRadius: 2, transition: 'transform 0.2s', transform: menuOpen ? 'translateY(-6px) rotate(-45deg)' : 'none' }} />
+          </button>
+
+          {/* Mobile dropdown menu */}
+          <div
+            className={`navbar-mobile-menu${menuOpen ? ' open' : ''}`}
+            style={{
+              position: 'absolute',
+              top: '100%',
+              left: 0,
+              right: 0,
+              backgroundColor: 'var(--bg-color, #111)',
+              borderBottom: '1px solid var(--border-color)',
+              flexDirection: 'column',
+              padding: '8px 12px 12px',
+              gap: 4,
+              zIndex: 999,
+              boxShadow: '0 4px 12px rgba(0,0,0,0.2)',
+            }}
+          >
+            {navLinks}
+
+            <div style={{ height: 1, backgroundColor: 'var(--border-color)', margin: '8px 0' }} />
+
+            {user ? (
+              <>
                 <Link
                   to="/settings"
-                  role="menuitem"
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 6,
-                    padding: '8px 16px',
-                    textDecoration: 'none',
-                    color: 'inherit',
-                    borderRadius: '4px',
-                    margin: '2px 4px',
-                    transition: 'background-color 0.2s'
-                  }}
-                  onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'rgba(100, 108, 255, 0.1)' }}
-                  onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent' }}
+                  style={{ ...navLinkStyle('/settings') }}
                 >
-                  <span style={{ fontSize: '16px' }}>⚙️</span> Settings
+                  <span style={{ fontSize: 17 }}>⚙️</span> Settings
                 </Link>
                 <button
                   type="button"
-                  role="menuitem"
                   onClick={handleLogout}
                   style={{
                     display: 'flex',
                     alignItems: 'center',
-                    gap: 6,
+                    gap: 8,
+                    padding: '10px 14px',
+                    borderRadius: 6,
                     border: 'none',
-                    padding: '8px 16px',
                     backgroundColor: 'transparent',
                     color: 'inherit',
-                    textAlign: 'left',
                     cursor: 'pointer',
-                    borderRadius: '4px',
-                    margin: '2px 4px',
-                    transition: 'background-color 0.2s'
+                    fontSize: 15,
+                    textAlign: 'left',
+                    width: '100%',
                   }}
-                  onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'rgba(220, 38, 38, 0.1)' }}
-                  onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent' }}
                 >
-                  <span style={{ fontSize: '16px' }}>🚪</span> Logout
+                  <span style={{ fontSize: 17 }}>🚪</span> Logout
                 </button>
-              </div>
+              </>
+            ) : (
+              <a
+                href={`${(import.meta as any).env.VITE_API_URL || 'https://api.ajpeng.ca'}/api/auth/patreon`}
+                style={{ ...navLinkStyle(''), justifyContent: 'flex-start' }}
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 569 546" width="16" height="16" aria-hidden="true" style={{ flexShrink: 0 }}>
+                  <circle cx="363" cy="205" r="205" fill="#FF424D" />
+                  <rect x="0" y="0" width="112" height="546" fill="#052D49" />
+                </svg>
+                Login with Patreon
+              </a>
             )}
           </div>
-        ) : (
-          <a
-            href={`${(import.meta as any).env.VITE_API_URL || 'https://api.ajpeng.ca'}/api/auth/patreon`}
-            title="Login with Patreon"
-            aria-label="Login with Patreon"
-            style={{ ...baseButtonStyle, justifyContent: 'center', minWidth: '44px' }}
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 569 546" width="16" height="16" aria-hidden="true">
-              <circle cx="363" cy="205" r="205" fill="#FF424D" />
-              <rect x="0" y="0" width="112" height="546" fill="#052D49" />
-            </svg>
-            Login
-          </a>
-        )}
-
-        <button
-          type="button"
-          aria-label={`Theme: ${theme}`}
-          title={`Theme: ${theme}`}
-          onClick={cycleTheme}
-          style={{ ...baseButtonStyle, justifyContent: 'center', minWidth: '44px', fontSize: '18px' }}
-        >
-          {theme === 'light' ? '☀️' : theme === 'dark' ? '🌙' : '💻'}
-        </button>
-      </nav>
-    </header>
+        </div>
+      </header>
+    </>
   )
 }
 

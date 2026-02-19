@@ -4,6 +4,9 @@
  *
  * Run with: npm run seed:hsk
  * Safe to run multiple times — skips words that already exist.
+ *
+ * Each HSK level only contains words NEW to that level — words from lower
+ * levels are excluded, even though the source CSVs are cumulative.
  */
 
 import * as fs from 'fs';
@@ -23,6 +26,18 @@ async function main() {
     fs.readFileSync(path.join(dataDir, 'cedict.json'), 'utf-8')
   );
 
+  // Helper: read all simplified characters from a CSV file
+  function readSimplifiedSet(csvPath: string): Set<string> {
+    if (!fs.existsSync(csvPath)) return new Set();
+    return new Set(
+      fs.readFileSync(csvPath, 'utf-8')
+        .split(/\r?\n/)
+        .slice(1) // skip header row
+        .map(l => l.split(',')[1]?.trim())
+        .filter((s): s is string => !!s)
+    );
+  }
+
   let totalInserted = 0;
   let totalSkipped = 0;
 
@@ -31,6 +46,13 @@ async function main() {
     if (!fs.existsSync(csvPath)) {
       console.warn(`Warning: ${csvPath} not found, skipping HSK ${level}`);
       continue;
+    }
+
+    // Build set of all words that belong to lower levels (to exclude them)
+    const lowerLevelWords = new Set<string>();
+    for (let l = 1; l < level; l++) {
+      const lowerPath = path.join(dataDir, `hsk_${l}.csv`);
+      for (const s of readSimplifiedSet(lowerPath)) lowerLevelWords.add(s);
     }
 
     const lines = fs.readFileSync(csvPath, 'utf-8').split(/\r?\n/).slice(1); // skip header row
@@ -43,6 +65,8 @@ async function main() {
         const simplified = parts[1]?.trim();
         const csvPinyin = parts.slice(2).join(',').trim(); // rejoin in case pinyin has commas
         if (!simplified) return null;
+        // Skip words that belong to a lower HSK level
+        if (lowerLevelWords.has(simplified)) return null;
 
         const dictEntry = dict[simplified];
         return {
@@ -74,7 +98,7 @@ async function main() {
     }
 
     console.log(
-      `HSK ${level}: ${words.length} words — inserted ${levelInserted}, skipped ${levelSkipped} (already existed)`
+      `HSK ${level}: ${words.length} unique words — inserted ${levelInserted}, skipped ${levelSkipped} (already existed)`
     );
     totalInserted += levelInserted;
     totalSkipped += levelSkipped;

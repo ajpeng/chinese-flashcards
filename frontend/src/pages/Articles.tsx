@@ -3,6 +3,8 @@ import { useAuth } from '../contexts/AuthContext';
 import { convertPinyinStyle } from '../utils/pinyin';
 import { convertChineseText } from '../utils/chinese-conversion';
 
+const API_URL = import.meta.env.VITE_API_URL || 'https://api.ajpeng.ca';
+
 export type Word = {
   id: number;
   simplified: string;
@@ -83,7 +85,6 @@ function ArticleContent({ content, words, showPinyin = false, onToggle, markingS
 
   const speak = async (text: string) => {
     try {
-      const API_URL = 'https://api.ajpeng.ca';
       const response = await fetch(`${API_URL}/api/tts`, {
         method: 'POST',
         headers: {
@@ -392,8 +393,6 @@ export default function Articles(): React.ReactElement {
   const learnedSet = useMemo(() => new Set(learnedIds), [learnedIds]);
   const markingSet = useMemo(() => new Set(markingIds), [markingIds]);
   const savedSet = useMemo(() => new Set(savedIds), [savedIds]);
-  const API_URL = 'https://api.ajpeng.ca';
-
   const { user, accessToken, loginWithPatreon } = useAuth();
   // Get user's pinyin style preference, default to 'marks'
   const pinyinStyle = user?.pinyinStyle || 'marks';
@@ -717,189 +716,80 @@ export default function Articles(): React.ReactElement {
     void fetchArticles();
   }, []);
 
+  const btnStyle = (active: boolean): React.CSSProperties => ({
+    padding: '5px 9px',
+    background: active ? 'rgba(100, 108, 255, 0.2)' : 'transparent',
+    border: '1px solid var(--border-color)',
+    borderRadius: 4,
+    fontSize: '0.85em',
+    cursor: 'pointer',
+    color: 'inherit',
+    whiteSpace: 'nowrap' as const,
+  });
+
   return (
-    <div style={{ maxWidth: 960 }}>
+    <div style={{ maxWidth: 960, padding: '0 4px' }}>
       <h2>Articles & Vocabulary</h2>
-      <div style={{ marginBottom: 12, display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-        <button onClick={fetchArticles} disabled={loading}>
-          {loading ? 'Refreshing…' : 'Refresh'}
-        </button>
-        <button onClick={() => setShowPinyin((s) => !s)} aria-pressed={showPinyin}>
-          Toggle Pinyin
-        </button>
-        <button 
-          onClick={async () => {
-            const newVariant = localTextVariant === 'simplified' ? 'traditional' : 'simplified';
-            setLocalTextVariant(newVariant);
-            await syncSettingsToBackend({ textVariant: newVariant });
-          }}
-          style={{
-            padding: '6px 12px',
-            background: 'rgba(100, 108, 255, 0.1)',
-            border: '1px solid var(--border-color)',
-            borderRadius: 4,
-            fontSize: '0.85em',
-            cursor: 'pointer'
-          }}
-          title={`Switch to ${localTextVariant === 'simplified' ? 'Traditional' : 'Simplified'} Chinese`}
-        >
-          {localTextVariant === 'simplified' ? 'Traditional 繁' : 'Simplified 简'}
-        </button>
-        <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-          <span style={{ fontSize: '0.9em', color: 'var(--muted-color)' }}>Font:</span>
-          <button
-            onClick={() => setLocalFontSize('small')}
-            style={{
-              padding: '4px 8px',
-              background: localFontSize === 'small' ? 'rgba(100, 108, 255, 0.2)' : 'transparent',
-              border: '1px solid var(--border-color)',
-              borderRadius: 4,
-              fontSize: '0.85em'
-            }}
-            title="Small font size"
-          >
-            A
+
+      {/* Toolbar */}
+      <div style={{ marginBottom: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {/* Row 1: misc actions */}
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+          <button onClick={fetchArticles} disabled={loading} style={btnStyle(false)}>
+            {loading ? 'Refreshing…' : 'Refresh'}
+          </button>
+          <button onClick={() => setShowPinyin((s) => !s)} aria-pressed={showPinyin} style={btnStyle(showPinyin)}>
+            Pinyin {showPinyin ? 'ON' : 'OFF'}
           </button>
           <button
-            onClick={() => setLocalFontSize('medium')}
-            style={{
-              padding: '4px 8px',
-              background: localFontSize === 'medium' ? 'rgba(100, 108, 255, 0.2)' : 'transparent',
-              border: '1px solid var(--border-color)',
-              borderRadius: 4,
-              fontSize: '1em'
+            onClick={async () => {
+              const newVariant = localTextVariant === 'simplified' ? 'traditional' : 'simplified';
+              setLocalTextVariant(newVariant);
+              await syncSettingsToBackend({ textVariant: newVariant });
             }}
-            title="Medium font size"
+            style={btnStyle(false)}
+            title={`Switch to ${localTextVariant === 'simplified' ? 'Traditional' : 'Simplified'} Chinese`}
           >
-            A
-          </button>
-          <button
-            onClick={() => setLocalFontSize('large')}
-            style={{
-              padding: '4px 8px',
-              background: localFontSize === 'large' ? 'rgba(100, 108, 255, 0.2)' : 'transparent',
-              border: '1px solid var(--border-color)',
-              borderRadius: 4,
-              fontSize: '1.15em'
-            }}
-            title="Large font size"
-          >
-            A
-          </button>
-          <button
-            onClick={() => setLocalFontSize('xlarge')}
-            style={{
-              padding: '4px 8px',
-              background: localFontSize === 'xlarge' ? 'rgba(100, 108, 255, 0.2)' : 'transparent',
-              border: '1px solid var(--border-color)',
-              borderRadius: 4,
-              fontSize: '1.3em'
-            }}
-            title="Extra large font size"
-          >
-            A
+            {localTextVariant === 'simplified' ? '繁 Traditional' : '简 Simplified'}
           </button>
         </div>
-        <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-          <span style={{ fontSize: '0.9em', color: 'var(--muted-color)' }}>Speech:</span>
-          <button
-            onClick={() => setSpeechRate(0.5)}
-            style={{
-              padding: '4px 8px',
-              background: speechRate === 0.5 ? 'rgba(100, 108, 255, 0.2)' : 'transparent',
-              border: '1px solid var(--border-color)',
-              borderRadius: 4,
-              fontSize: '0.85em'
-            }}
-            title="Slow speech (0.5x)"
-          >
-            0.5x
-          </button>
-          <button
-            onClick={() => setSpeechRate(0.8)}
-            style={{
-              padding: '4px 8px',
-              background: speechRate === 0.8 ? 'rgba(100, 108, 255, 0.2)' : 'transparent',
-              border: '1px solid var(--border-color)',
-              borderRadius: 4,
-              fontSize: '0.85em'
-            }}
-            title="Normal speech (0.8x)"
-          >
-            0.8x
-          </button>
-          <button
-            onClick={() => setSpeechRate(1.0)}
-            style={{
-              padding: '4px 8px',
-              background: speechRate === 1.0 ? 'rgba(100, 108, 255, 0.2)' : 'transparent',
-              border: '1px solid var(--border-color)',
-              borderRadius: 4,
-              fontSize: '0.85em'
-            }}
-            title="Fast speech (1.0x)"
-          >
-            1.0x
-          </button>
-          <button
-            onClick={() => setSpeechRate(1.2)}
-            style={{
-              padding: '4px 8px',
-              background: speechRate === 1.2 ? 'rgba(100, 108, 255, 0.2)' : 'transparent',
-              border: '1px solid var(--border-color)',
-              borderRadius: 4,
-              fontSize: '0.85em'
-            }}
-            title="Very fast speech (1.2x)"
-          >
-            1.2x
-          </button>
-          <button
-            onClick={() => setSpeechRate(1.5)}
-            style={{
-              padding: '4px 8px',
-              background: speechRate === 1.5 ? 'rgba(100, 108, 255, 0.2)' : 'transparent',
-              border: '1px solid var(--border-color)',
-              borderRadius: 4,
-              fontSize: '0.85em'
-            }}
-            title="Extra fast speech (1.5x)"
-          >
-            1.5x
-          </button>
-          <button
-            onClick={() => setSpeechRate(2.0)}
-            style={{
-              padding: '4px 8px',
-              background: speechRate === 2.0 ? 'rgba(100, 108, 255, 0.2)' : 'transparent',
-              border: '1px solid var(--border-color)',
-              borderRadius: 4,
-              fontSize: '0.85em'
-            }}
-            title="Super fast speech (2.0x)"
-          >
-            2.0x
-          </button>
+
+        {/* Row 2: font size + speech rate + voice */}
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+          {/* Font size */}
+          <div style={{ display: 'flex', gap: 3, alignItems: 'center' }}>
+            <span style={{ fontSize: '0.8em', color: 'var(--muted-color)', marginRight: 2 }}>Font</span>
+            {(['small', 'medium', 'large', 'xlarge'] as const).map((s, i) => (
+              <button key={s} onClick={() => setLocalFontSize(s)} style={{ ...btnStyle(localFontSize === s), fontSize: `${0.8 + i * 0.15}em`, padding: '3px 7px' }} title={`${s} font`}>A</button>
+            ))}
+          </div>
+
+          {/* Speech rate */}
+          <div style={{ display: 'flex', gap: 3, alignItems: 'center' }}>
+            <span style={{ fontSize: '0.8em', color: 'var(--muted-color)', marginRight: 2 }}>Speed</span>
+            {([0.5, 0.8, 1.0, 1.2, 1.5, 2.0] as const).map((r) => (
+              <button key={r} onClick={() => setSpeechRate(r)} style={btnStyle(speechRate === r)} title={`${r}x speed`}>{r}x</button>
+            ))}
+          </div>
+
+          {/* Voice */}
           <select
             value={selectedVoice}
             onChange={(e) => setSelectedVoice(e.target.value)}
             style={{
-              padding: '4px 8px',
+              padding: '5px 8px',
               border: '1px solid var(--border-color)',
               borderRadius: 4,
               fontSize: '0.85em',
-              background: selectedVoice ? 'rgba(100, 108, 255, 0.1)' : 'transparent',
+              background: 'transparent',
               color: 'inherit',
-              minWidth: '120px',
-              maxWidth: '160px'
+              maxWidth: 150,
             }}
-            title={`Current voice: ${selectedVoice || 'Default'}`}
+            title={`Voice: ${selectedVoice || 'Default'}`}
           >
             <option value="">Default Voice</option>
             {availableVoices.map((voice, index) => (
-              <option key={`${voice}-${index}`} value={voice}>
-                {voice}
-              </option>
+              <option key={`${voice}-${index}`} value={voice}>{voice.replace('zh-CN-', '').replace('Neural', '')}</option>
             ))}
           </select>
         </div>
@@ -920,46 +810,22 @@ export default function Articles(): React.ReactElement {
           {data.map((article) => (
             <article key={article.id} className="card">
               <header style={{ marginBottom: 8 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
-                  <h3 style={{ margin: 0 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8, marginBottom: 6 }}>
+                  <h3 style={{ margin: 0, minWidth: 0, wordBreak: 'break-word' }}>
                     {article.title}
                   </h3>
-                  {/* Audio Status Indicator - Minimal */}
-                  <div style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 4,
-                    fontSize: '0.8em',
-                    color: 'var(--muted-color)',
-                    minWidth: '70px' // Stable width
-                  }}>
+                  {/* Audio Status Indicator */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 3, fontSize: '0.78em', flexShrink: 0 }}>
                     {readingArticleId === article.id && currentAudioSrc ? (
-                      <>
-                        <span style={{ color: 'rgb(34, 197, 94)' }}>🎵</span>
-                        <span style={{ color: 'rgb(34, 197, 94)' }}>Playing</span>
-                      </>
+                      <span style={{ color: 'rgb(34, 197, 94)' }}>🎵 Playing</span>
                     ) : readingArticleId === article.id ? (
-                      <>
-                        <span style={{ color: 'rgba(128, 128, 128, 0.7)' }}>⏳</span>
-                        <span style={{ color: 'rgba(128, 128, 128, 0.7)' }}>Loading</span>
-                      </>
-                    ) : (
-                      <>
-                        <span style={{ color: 'rgba(128, 128, 128, 0.5)' }}>🎧</span>
-                        <span style={{ color: 'rgba(128, 128, 128, 0.5)' }}>Audio</span>
-                      </>
-                    )}
+                      <span style={{ color: 'rgba(128,128,128,0.7)' }}>⏳ Loading</span>
+                    ) : null}
                   </div>
                 </div>
-                <div className="muted">
-                  HSK level: <strong>{article.hskLevel}</strong>
-                  {article.createdAt && (
-                    <>
-                      {' '}
-                      · Created:{' '}
-                      {new Date(article.createdAt).toLocaleDateString()}
-                    </>
-                  )}
+                <div className="muted" style={{ fontSize: '0.85em' }}>
+                  HSK {article.hskLevel}
+                  {article.createdAt && <> · {new Date(article.createdAt).toLocaleDateString()}</>}
                 </div>
               </header>
 
@@ -976,12 +842,12 @@ export default function Articles(): React.ReactElement {
                   : '1px solid rgba(255, 255, 255, 0.05)',
                 transition: 'all 0.3s ease'
               }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
                   <button
                     onClick={() => readParagraph(article.id, article.content, article.words)}
                     disabled={!voicesLoaded}
                     style={{
-                      padding: '8px 12px',
+                      padding: '7px 12px',
                       background: readingArticleId === article.id && currentAudioSrc
                         ? 'rgba(34, 197, 94, 0.1)'
                         : 'rgba(59, 130, 246, 0.1)',
@@ -991,13 +857,14 @@ export default function Articles(): React.ReactElement {
                       cursor: voicesLoaded ? 'pointer' : 'not-allowed',
                       color: 'rgb(34, 197, 94)',
                       fontWeight: 500,
-                      opacity: voicesLoaded ? 1 : 0.6
+                      opacity: voicesLoaded ? 1 : 0.6,
+                      whiteSpace: 'nowrap',
                     }}
                     title={readingArticleId === article.id ? 'Audio is ready' : 'Generate and play audio'}
                   >
-                    {!voicesLoaded ? '⏳ Loading...' : readingArticleId === article.id ? '🎧 Audio Ready' : '▶️ Play Article'}
+                    {!voicesLoaded ? '⏳ Loading...' : readingArticleId === article.id ? '🎧 Audio Ready' : '▶️ Play'}
                   </button>
-                  
+
                   {readingArticleId === article.id && (
                     <button
                       onClick={() => {
@@ -1016,23 +883,18 @@ export default function Articles(): React.ReactElement {
                         fontSize: '0.8em',
                         cursor: 'pointer',
                         color: 'rgb(220, 38, 38)',
-                        fontWeight: 500
+                        fontWeight: 500,
+                        whiteSpace: 'nowrap',
                       }}
                       title="Stop and reset audio"
                     >
                       ⏹️ Stop
                     </button>
                   )}
-                  
-                  <div style={{ 
-                    fontSize: '0.8em', 
-                    color: 'var(--muted-color)',
-                    display: 'flex',
-                    gap: 12
-                  }}>
-                    <span>Speed: {speechRate}x</span>
-                    <span>Voice: {selectedVoice.replace('zh-CN-', '').replace('Neural', '') || 'Default'}</span>
-                  </div>
+
+                  <span style={{ fontSize: '0.78em', color: 'var(--muted-color)', whiteSpace: 'nowrap' }}>
+                    {speechRate}x · {selectedVoice.replace('zh-CN-', '').replace('Neural', '') || 'Default'}
+                  </span>
                 </div>
                 
                 {/* Native Audio Element - Only show when audio is ready */}
@@ -1170,7 +1032,7 @@ export default function Articles(): React.ReactElement {
                                 aria-pressed={learnedSet.has(word.id)}
                                 title={learnedSet.has(word.id) ? 'Unlearn this word' : 'Mark this word as learned'}
                               >
-                                {markingSet.has(word.id) ? (learnedSet.has(word.id) ? 'Unlearning…' : 'Marking…') : (learnedSet.has(word.id) ? 'Learned' : 'Mark learned')}
+                                {markingSet.has(word.id) ? '⏳' : (learnedSet.has(word.id) ? '★ Done' : '☆ Learn')}
                               </button>
                             </td>
                           </tr>
