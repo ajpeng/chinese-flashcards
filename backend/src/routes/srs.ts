@@ -205,6 +205,10 @@ router.post(
 
     try {
       const userId = req.user!.userId;
+      if (!userId) {
+        res.status(401).json({ error: 'Invalid token: please log out and log back in' });
+        return;
+      }
       const { wordId, quality } = req.body as { wordId: number; quality: number };
 
       // Verify word exists
