@@ -1,4 +1,4 @@
-
+import React from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import useTheme from '../theme'
 import { useAuth } from '../contexts/AuthContext'
@@ -8,7 +8,7 @@ function NavBar() {
   const location = useLocation()
   const navigate = useNavigate()
   const [theme, setTheme] = useTheme()
-  const { user, logout, loginWithPatreon } = useAuth()
+  const { user, logout } = useAuth()
   const [showSettings, setShowSettings] = useState(false)
 
   // Reset dropdown when location changes (navigation)
@@ -29,127 +29,111 @@ function NavBar() {
 
   const isActive = (path: string) => location.pathname === path
 
+  const baseButtonStyle: React.CSSProperties = {
+    border: '1px solid rgba(255, 255, 255, 0.2)',
+    padding: '8px 16px',
+    borderRadius: '6px',
+    cursor: 'pointer',
+    backgroundColor: 'transparent',
+    color: 'inherit',
+    textDecoration: 'none',
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: 6,
+    minHeight: '40px',
+  }
+
+  const activeBg = 'rgba(59, 130, 246, 0.2)'
+
   return (
-    <header style={{
-      display: 'flex',
-      alignItems: 'center',
-      gap: 16,
-      padding: '16px 32px',
-      borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
-      backgroundColor: 'rgba(0, 0, 0, 0.2)'
-    }}>
+    <header
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 16,
+        padding: '16px 32px',
+        borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
+        backgroundColor: 'rgba(0, 0, 0, 0.2)'
+      }}
+    >
       <Link to="/" style={{ display: 'flex', alignItems: 'center', gap: 12, textDecoration: 'none', color: 'inherit' }}>
         <span style={{ fontSize: '28px', lineHeight: 1 }}>中</span>
         <h1 style={{ margin: 0, fontSize: '24px', fontWeight: 600 }}>Chinese Flashcards</h1>
       </Link>
+
       <nav style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
         <Link
           to="/articles"
-          style={{
-            backgroundColor: isActive('/articles') ? 'rgba(59, 130, 246, 0.5)' : 'transparent',
-            border: '1px solid rgba(255, 255, 255, 0.2)',
-            padding: '8px 16px',
-            borderRadius: '6px',
-            cursor: 'pointer',
-            textDecoration: 'none',
-            color: 'inherit',
-            height: '40px',
-            display: 'flex',
-            alignItems: 'center'
-          }}
+          aria-current={isActive('/articles') ? 'page' : undefined}
+          style={{ ...baseButtonStyle, backgroundColor: isActive('/articles') ? activeBg : 'transparent' }}
         >
-          <span style={{ fontSize: '18px', marginRight: '6px' }}>📚</span> Articles
+          <span style={{ fontSize: '18px' }}>📚</span> Articles
         </Link>
+
         <Link
           to="/flashcards"
-          style={{
-            backgroundColor: isActive('/flashcards') ? 'rgba(16, 185, 129, 0.5)' : 'transparent',
-            border: '1px solid rgba(255, 255, 255, 0.2)',
-            padding: '8px 16px',
-            borderRadius: '6px',
-            cursor: 'pointer',
-            textDecoration: 'none',
-            color: 'inherit',
-            height: '40px',
-            display: 'flex',
-            alignItems: 'center'
-          }}
+          aria-current={isActive('/flashcards') ? 'page' : undefined}
+          style={{ ...baseButtonStyle, backgroundColor: isActive('/flashcards') ? activeBg : 'transparent' }}
         >
-          <span style={{ fontSize: '18px', marginRight: '6px' }}>🃏</span> Flashcards
+          <span style={{ fontSize: '18px' }}>🃏</span> Flashcards
         </Link>
+
         <Link
           to="/speech-practice"
-          style={{
-            backgroundColor: isActive('/speech-practice') ? 'rgba(139, 69, 19, 0.5)' : 'transparent',
-            border: '1px solid rgba(255, 255, 255, 0.2)',
-            padding: '8px 16px',
-            borderRadius: '6px',
-            cursor: 'pointer',
-            textDecoration: 'none',
-            color: 'inherit',
-            height: '40px',
-            display: 'flex',
-            alignItems: 'center'
-          }}
+          aria-current={isActive('/speech-practice') ? 'page' : undefined}
+          style={{ ...baseButtonStyle, backgroundColor: isActive('/speech-practice') ? activeBg : 'transparent' }}
         >
-          <span style={{ fontSize: '18px', marginRight: '6px' }}>🎤</span> Speech Practice
+          <span style={{ fontSize: '18px' }}>🎤</span> Speech Practice
         </Link>
+
         {user && (
           <Link
             to="/new"
-            style={{
-              backgroundColor: isActive('/new') ? 'rgba(59, 130, 246, 0.5)' : 'transparent',
-              border: '1px solid rgba(255, 255, 255, 0.2)',
-              padding: '8px 16px',
-              borderRadius: '6px',
-              cursor: 'pointer',
-              textDecoration: 'none',
-              color: 'inherit',
-              height: '40px',
-              display: 'flex',
-              alignItems: 'center'
-            }}
+            aria-current={isActive('/new') ? 'page' : undefined}
+            style={{ ...baseButtonStyle, backgroundColor: isActive('/new') ? activeBg : 'transparent' }}
           >
-            <span style={{ fontSize: '18px', marginRight: '6px' }}>✏️</span> New Article
+            <span style={{ fontSize: '18px' }}>✏️</span> New Article
           </Link>
         )}
+
         {user ? (
           <div style={{ position: 'relative' }}>
             <button
+              type="button"
+              aria-haspopup="true"
+              aria-expanded={showSettings}
+              aria-controls="settings-menu"
               onClick={() => setShowSettings(!showSettings)}
-              style={{
-                border: '1px solid rgba(255, 255, 255, 0.2)',
-                padding: '8px 16px',
-                borderRadius: '6px',
-                cursor: 'pointer',
-                backgroundColor: 'transparent',
-                color: 'inherit',
-                height: '40px',
-                display: 'flex',
-                alignItems: 'center'
-              }}
+              style={{ ...baseButtonStyle }}
             >
               {user.name || user.email}
             </button>
             {showSettings && (
-              <div style={{
-                position: 'absolute',
-                top: 'calc(100% + 4px)',
-                right: 0,
-                backgroundColor: 'var(--bg-color, white)',
-                border: '1px solid var(--border-color)',
-                borderRadius: '8px',
-                padding: '8px 0',
-                display: 'flex',
-                flexDirection: 'column',
-                minWidth: '120px',
-                boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
-                zIndex: 1000
-              }}>
+              <div
+                id="settings-menu"
+                role="menu"
+                style={{
+                  position: 'absolute',
+                  top: 'calc(100% + 4px)',
+                  right: 0,
+                  backgroundColor: 'var(--bg-color, white)',
+                  border: '1px solid var(--border-color)',
+                  borderRadius: '8px',
+                  padding: '8px 0',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  minWidth: '120px',
+                  boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
+                  zIndex: 1000
+                }}
+              >
                 <Link
                   to="/settings"
+                  role="menuitem"
                   style={{
-                    display: 'block',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6,
                     padding: '8px 16px',
                     textDecoration: 'none',
                     color: 'inherit',
@@ -157,19 +141,19 @@ function NavBar() {
                     margin: '2px 4px',
                     transition: 'background-color 0.2s'
                   }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.backgroundColor = 'rgba(100, 108, 255, 0.1)';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.backgroundColor = 'transparent';
-                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'rgba(100, 108, 255, 0.1)' }}
+                  onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent' }}
                 >
-                  <span style={{ fontSize: '16px', marginRight: '6px' }}>⚙️</span> Settings
+                  <span style={{ fontSize: '16px' }}>⚙️</span> Settings
                 </Link>
                 <button
+                  type="button"
+                  role="menuitem"
                   onClick={handleLogout}
                   style={{
-                    display: 'block',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6,
                     border: 'none',
                     padding: '8px 16px',
                     backgroundColor: 'transparent',
@@ -180,14 +164,10 @@ function NavBar() {
                     margin: '2px 4px',
                     transition: 'background-color 0.2s'
                   }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.backgroundColor = 'rgba(220, 38, 38, 0.1)';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.backgroundColor = 'transparent';
-                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'rgba(220, 38, 38, 0.1)' }}
+                  onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent' }}
                 >
-                  <span style={{ fontSize: '16px', marginRight: '6px' }}>🚪</span> Logout
+                  <span style={{ fontSize: '16px' }}>🚪</span> Logout
                 </button>
               </div>
             )}
@@ -197,58 +177,25 @@ function NavBar() {
             href={`${(import.meta as any).env.VITE_API_URL || 'https://api.ajpeng.ca'}/api/auth/patreon`}
             title="Login with Patreon"
             aria-label="Login with Patreon"
-            style={{
-              backgroundColor: 'transparent',
-              border: '1px solid rgba(255, 255, 255, 0.2)',
-              padding: '8px 16px',
-              borderRadius: '6px',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              height: '40px',
-              minWidth: '44px',
-              textDecoration: 'none',
-              color: 'inherit'
-            }}
+            style={{ ...baseButtonStyle, justifyContent: 'center', minWidth: '44px' }}
           >
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 569 546" width="16" height="16" aria-hidden="true" style={{ marginRight: '6px' }}>
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 569 546" width="16" height="16" aria-hidden="true">
               <circle cx="363" cy="205" r="205" fill="#FF424D" />
               <rect x="0" y="0" width="112" height="546" fill="#052D49" />
             </svg>
             Login
           </a>
         )}
-        <a
-          href="#toggle-theme"
-          role="button"
+
+        <button
+          type="button"
           aria-label={`Theme: ${theme}`}
           title={`Theme: ${theme}`}
-          onClick={(e) => { e.preventDefault(); cycleTheme(); }}
-          onKeyDown={(e) => {
-            if ((e as React.KeyboardEvent).key === 'Enter' || (e as React.KeyboardEvent).key === ' ' || (e as React.KeyboardEvent).key === 'Spacebar') {
-              e.preventDefault();
-              cycleTheme();
-            }
-          }}
-          style={{
-            border: '1px solid rgba(255, 255, 255, 0.2)',
-            padding: '8px 16px',
-            borderRadius: '6px',
-            cursor: 'pointer',
-            backgroundColor: 'transparent',
-            height: '40px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            fontSize: '18px',
-            minWidth: '44px',
-            textDecoration: 'none',
-            color: 'inherit'
-          }}
+          onClick={cycleTheme}
+          style={{ ...baseButtonStyle, justifyContent: 'center', minWidth: '44px', fontSize: '18px' }}
         >
           {theme === 'light' ? '☀️' : theme === 'dark' ? '🌙' : '💻'}
-        </a>
+        </button>
       </nav>
     </header>
   )
