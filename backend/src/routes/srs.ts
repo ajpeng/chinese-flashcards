@@ -51,7 +51,7 @@ function computeSM2(
 // GET /api/srs/decks — deck stats for all HSK levels
 router.get('/decks', requireAuth, async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).user.id;
+    const userId = req.user!.userId;
     const now = new Date();
 
     // Count HSK words per level
@@ -106,7 +106,7 @@ router.get(
     }
 
     try {
-      const userId = (req as any).user.id;
+      const userId = req.user!.userId;
       const level = parseInt(req.params.level, 10);
       const now = new Date();
 
@@ -204,7 +204,7 @@ router.post(
     }
 
     try {
-      const userId = (req as any).user.id;
+      const userId = req.user!.userId;
       const { wordId, quality } = req.body as { wordId: number; quality: number };
 
       // Verify word exists

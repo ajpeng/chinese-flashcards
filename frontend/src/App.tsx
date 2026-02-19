@@ -95,7 +95,11 @@ function Layout() {
               <Settings />
             </ProtectedRoute>
           } />
-          <Route path="/flashcards" element={<Flashcards />} />
+          <Route path="/flashcards" element={
+            <ProtectedRoute>
+              <Flashcards />
+            </ProtectedRoute>
+          } />
           <Route path="/health" element={<Health />} />
         </Routes>
       </main>

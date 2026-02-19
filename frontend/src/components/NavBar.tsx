@@ -57,26 +57,94 @@ function NavBar() {
       }}
     >
       <Link to="/" style={{ display: 'flex', alignItems: 'center', gap: 12, textDecoration: 'none', color: 'inherit' }}>
-        <span style={{ fontSize: '32px' }}>中</span>
+        <span style={{ fontSize: '28px', lineHeight: 1 }}>中</span>
         <h1 style={{ margin: 0, fontSize: '24px', fontWeight: 600 }}>Chinese Flashcards</h1>
       </Link>
 
       <nav style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
         <Link
           to="/articles"
+<<<<<<< HEAD
           aria-current={isActive('/articles') ? 'page' : undefined}
           style={{ ...baseButtonStyle, backgroundColor: isActive('/articles') ? activeBg : baseButtonStyle.backgroundColor }}
         >
           📚 Articles
+=======
+          style={{
+            backgroundColor: isActive('/articles') ? 'rgba(59, 130, 246, 0.5)' : 'transparent',
+            border: '1px solid rgba(255, 255, 255, 0.2)',
+            padding: '8px 16px',
+            borderRadius: '6px',
+            cursor: 'pointer',
+            textDecoration: 'none',
+            color: 'inherit',
+            height: '40px',
+            display: 'flex',
+            alignItems: 'center'
+          }}
+        >
+          <span style={{ fontSize: '18px', marginRight: '6px' }}>📚</span> Articles
+        </Link>
+        <Link
+          to="/flashcards"
+          style={{
+            backgroundColor: isActive('/flashcards') ? 'rgba(16, 185, 129, 0.5)' : 'transparent',
+            border: '1px solid rgba(255, 255, 255, 0.2)',
+            padding: '8px 16px',
+            borderRadius: '6px',
+            cursor: 'pointer',
+            textDecoration: 'none',
+            color: 'inherit',
+            height: '40px',
+            display: 'flex',
+            alignItems: 'center'
+          }}
+        >
+          <span style={{ fontSize: '18px', marginRight: '6px' }}>🃏</span> Flashcards
+        </Link>
+        <Link
+          to="/speech-practice"
+          style={{
+            backgroundColor: isActive('/speech-practice') ? 'rgba(139, 69, 19, 0.5)' : 'transparent',
+            border: '1px solid rgba(255, 255, 255, 0.2)',
+            padding: '8px 16px',
+            borderRadius: '6px',
+            cursor: 'pointer',
+            textDecoration: 'none',
+            color: 'inherit',
+            height: '40px',
+            display: 'flex',
+            alignItems: 'center'
+          }}
+        >
+          <span style={{ fontSize: '18px', marginRight: '6px' }}>🎤</span> Speech Practice
+>>>>>>> origin/main
         </Link>
 
         {user && (
           <Link
             to="/new"
+<<<<<<< HEAD
             aria-current={isActive('/new') ? 'page' : undefined}
             style={{ ...baseButtonStyle, backgroundColor: isActive('/new') ? activeBg : baseButtonStyle.backgroundColor }}
           >
             ✏️ New Article
+=======
+            style={{
+              backgroundColor: isActive('/new') ? 'rgba(59, 130, 246, 0.5)' : 'transparent',
+              border: '1px solid rgba(255, 255, 255, 0.2)',
+              padding: '8px 16px',
+              borderRadius: '6px',
+              cursor: 'pointer',
+              textDecoration: 'none',
+              color: 'inherit',
+              height: '40px',
+              display: 'flex',
+              alignItems: 'center'
+            }}
+          >
+            <span style={{ fontSize: '18px', marginRight: '6px' }}>✏️</span> New Article
+>>>>>>> origin/main
           </Link>
         )}
 
@@ -106,7 +174,21 @@ function NavBar() {
               aria-expanded={showSettings}
               aria-controls="settings-menu"
               onClick={() => setShowSettings(!showSettings)}
+<<<<<<< HEAD
               style={{ ...baseButtonStyle }}
+=======
+              style={{
+                border: '1px solid rgba(255, 255, 255, 0.2)',
+                padding: '8px 16px',
+                borderRadius: '6px',
+                cursor: 'pointer',
+                backgroundColor: 'transparent',
+                color: 'inherit',
+                height: '40px',
+                display: 'flex',
+                alignItems: 'center'
+              }}
+>>>>>>> origin/main
             >
               {user.name || user.email}
             </button>
@@ -149,7 +231,7 @@ function NavBar() {
                     e.currentTarget.style.backgroundColor = 'transparent'
                   }}
                 >
-                  Settings
+                  <span style={{ fontSize: '16px', marginRight: '6px' }}>⚙️</span> Settings
                 </Link>
 
                 <button
@@ -171,12 +253,13 @@ function NavBar() {
                   onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'rgba(220, 38, 38, 0.1)' }}
                   onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent' }}
                 >
-                  Logout
+                  <span style={{ fontSize: '16px', marginRight: '6px' }}>🚪</span> Logout
                 </button>
               </div>
             )}
           </div>
         ) : (
+<<<<<<< HEAD
           <button
             type="button"
             onClick={loginWithPatreon}
@@ -185,11 +268,35 @@ function NavBar() {
             style={{ ...baseButtonStyle, padding: '6px', justifyContent: 'center', minWidth: '44px' }}
           >
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 569 546" width="20" height="20" aria-hidden="true">
+=======
+          <a
+            href={`${(import.meta as any).env.VITE_API_URL || 'https://api.ajpeng.ca'}/api/auth/patreon`}
+            title="Login with Patreon"
+            aria-label="Login with Patreon"
+            style={{
+              backgroundColor: 'transparent',
+              border: '1px solid rgba(255, 255, 255, 0.2)',
+              padding: '8px 16px',
+              borderRadius: '6px',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              height: '40px',
+              minWidth: '44px',
+              textDecoration: 'none',
+              color: 'inherit'
+            }}
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 569 546" width="16" height="16" aria-hidden="true" style={{ marginRight: '6px' }}>
+>>>>>>> origin/main
               <circle cx="363" cy="205" r="205" fill="#FF424D" />
               <rect x="0" y="0" width="112" height="546" fill="#052D49" />
             </svg>
-          </button>
+            Login
+          </a>
         )}
+<<<<<<< HEAD
 
         <button
           type="button"
@@ -197,9 +304,38 @@ function NavBar() {
           title={`Theme: ${theme}`}
           onClick={cycleTheme}
           style={{ ...baseButtonStyle, justifyContent: 'center', minWidth: '44px' }}
+=======
+        <a
+          href="#toggle-theme"
+          role="button"
+          aria-label={`Theme: ${theme}`}
+          title={`Theme: ${theme}`}
+          onClick={(e) => { e.preventDefault(); cycleTheme(); }}
+          onKeyDown={(e) => {
+            if ((e as React.KeyboardEvent).key === 'Enter' || (e as React.KeyboardEvent).key === ' ' || (e as React.KeyboardEvent).key === 'Spacebar') {
+              e.preventDefault();
+              cycleTheme();
+            }
+          }}
+          style={{
+            border: '1px solid rgba(255, 255, 255, 0.2)',
+            padding: '8px 16px',
+            borderRadius: '6px',
+            cursor: 'pointer',
+            backgroundColor: 'transparent',
+            height: '40px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: '18px',
+            minWidth: '44px',
+            textDecoration: 'none',
+            color: 'inherit'
+          }}
+>>>>>>> origin/main
         >
           {theme === 'light' ? '☀️' : theme === 'dark' ? '🌙' : '💻'}
-        </button>
+        </a>
       </nav>
     </header>
   )

@@ -8,7 +8,7 @@ interface STTResponse {
 }
 
 interface BrowserSTTProps {
-  onTranscription: (result: STTResponse) => void;
+  onTranscription: (result: STTResponse, audioUrl?: string) => void;
   onError?: (error: string) => void;
   disabled?: boolean;
   language?: string;
@@ -31,7 +31,11 @@ export const BrowserSTT: React.FC<BrowserSTTProps> = ({
   const [isListening, setIsListening] = useState(false);
   const [isSupported, setIsSupported] = useState(false);
   const [transcript, setTranscript] = useState('');
+  const [isRecording, setIsRecording] = useState(false);
+  const [audioUrl, setAudioUrl] = useState('');
   const recognitionRef = useRef<any>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
 
   useEffect(() => {
     // Check if speech recognition is supported
@@ -47,6 +51,7 @@ export const BrowserSTT: React.FC<BrowserSTTProps> = ({
       recognition.onstart = () => {
         setIsListening(true);
         setTranscript('');
+        startAudioRecording();
       };
 
       recognition.onresult = (event: any) => {
@@ -70,7 +75,7 @@ export const BrowserSTT: React.FC<BrowserSTTProps> = ({
             confidence: event.results[0][0].confidence,
             language: language
           };
-          onTranscription(result);
+          onTranscription(result, audioUrl);
         }
       };
 
@@ -100,6 +105,7 @@ export const BrowserSTT: React.FC<BrowserSTTProps> = ({
 
       recognition.onend = () => {
         setIsListening(false);
+        stopAudioRecording();
       };
 
       recognitionRef.current = recognition;
@@ -117,6 +123,41 @@ export const BrowserSTT: React.FC<BrowserSTTProps> = ({
       recognitionRef.current.stop();
     }
   }, [isListening]);
+
+  const startAudioRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = mediaRecorder;
+      audioChunksRef.current = [];
+
+      mediaRecorder.ondataavailable = (event) => {
+        audioChunksRef.current.push(event.data);
+      };
+
+      mediaRecorder.onstop = () => {
+        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/wav' });
+        const url = URL.createObjectURL(audioBlob);
+        setAudioUrl(url);
+        setIsRecording(false);
+        
+        // Stop all audio tracks to release microphone
+        stream.getTracks().forEach(track => track.stop());
+      };
+
+      mediaRecorder.start();
+      setIsRecording(true);
+    } catch (error) {
+      console.error('Error starting audio recording:', error);
+      onError?.('Failed to access microphone for recording');
+    }
+  };
+
+  const stopAudioRecording = () => {
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.stop();
+    }
+  };
 
   if (!isSupported) {
     return (
