@@ -97,10 +97,34 @@ jobs:
         username: ubuntu
         key: ${{ secrets.EC2_SSH_KEY }}
         script: |
-          cd chinese-flashcards || git clone https://github.com/ajpeng/chinese-flashcards.git
-          cd chinese-flashcards
-          git fetch origin
-          git reset --hard origin/main
+          # ── Disk cleanup FIRST (runs before anything else) ──────────────────
+          echo "💾 Disk usage before cleanup:"
+          df -h /
+
+          # Remove old backend backup archives and random tar.gz files in home
+          cd ~
+          rm -f *.tar.gz *.zip awscliv2.zip get-docker.sh github.pub || true
+          rm -rf chinese-flashcards-backend.backup.* chinese-flashcards-backend aws || true
+
+          # Remove all unused Docker images, build cache, stopped containers
+          docker stop chinese-backend || true
+          docker rm chinese-backend || true
+          docker image prune -af || true
+          docker system prune -af --volumes || true
+
+          echo "💾 Disk usage after cleanup:"
+          df -h /
+          # ────────────────────────────────────────────────────────────────────
+
+          cd ~
+          if [ -d chinese-flashcards ]; then
+            cd chinese-flashcards
+            git fetch origin
+            git reset --hard origin/main
+          else
+            git clone https://github.com/ajpeng/chinese-flashcards.git
+            cd chinese-flashcards
+          fi
 
           # Configure nginx
           sudo cp nginx/api.ajpeng.ca /etc/nginx/sites-available/
@@ -118,14 +142,6 @@ jobs:
           # Start/reload nginx
           sudo systemctl enable nginx
           sudo systemctl start nginx || sudo systemctl reload nginx
-
-          # Free up disk space: remove stopped containers, dangling images, unused build cache
-          echo "🧹 Pruning unused Docker resources..."
-          docker stop chinese-backend || true
-          docker rm chinese-backend || true
-          docker image prune -af --filter "until=24h" || true
-          docker system prune -f || true
-          df -h /
 
           # Deploy backend container
           docker pull 426719348382.dkr.ecr.us-east-1.amazonaws.com/chinese-backend:latest
