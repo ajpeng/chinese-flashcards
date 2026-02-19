@@ -73,11 +73,11 @@ jobs:
           
           # Generate Prisma client
           echo "🔧 Generating Prisma client..."
-          npx prisma generate
-          
+          ./node_modules/.bin/prisma generate
+
           # Run database migrations
           echo "🗄️ Running migrations..."
-          npx prisma migrate deploy
+          ./node_modules/.bin/prisma migrate deploy
           
           # Restart application with PM2 (assumes PM2 is already installed)
           echo "🔄 Restarting application..."
