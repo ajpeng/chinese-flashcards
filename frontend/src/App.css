@@ -2,41 +2,191 @@
   min-height: 100vh;
 }
 
-.logo {
-  height: 6em;
-  padding: 1.5em;
-  will-change: filter;
-  transition: filter 300ms;
-}
-.logo:hover {
-  filter: drop-shadow(0 0 2em #646cffaa);
-}
-.logo.react:hover {
-  filter: drop-shadow(0 0 2em #61dafbaa);
+/* ── Home page ─────────────────────────────────────────────────────────────── */
+
+.home {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 0 4px;
 }
 
-@keyframes logo-spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
+/* Hero */
+.home-hero {
+  text-align: center;
+  padding: 64px 16px 56px;
 }
 
-@media (prefers-reduced-motion: no-preference) {
-  a:nth-of-type(2) .logo {
-    animation: logo-spin infinite 20s linear;
-  }
+.home-hero-char {
+  font-size: clamp(56px, 14vw, 96px);
+  line-height: 1;
+  margin-bottom: 16px;
+  background: linear-gradient(135deg, rgba(59,130,246,0.9) 0%, rgba(168,85,247,0.9) 50%, rgba(16,185,129,0.9) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  display: block;
+  font-weight: 700;
+  letter-spacing: -0.02em;
 }
 
-.card {
-  padding: 2em;
+.home-hero-title {
+  font-size: clamp(28px, 7vw, 48px);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  margin: 0 0 16px;
+  line-height: 1.1;
 }
 
-.read-the-docs {
-  color: #888;
+.home-hero-sub {
+  font-size: clamp(15px, 3vw, 18px);
+  color: var(--muted-color);
+  max-width: 520px;
+  margin: 0 auto 36px;
+  line-height: 1.6;
 }
+
+.home-hero-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.home-btn {
+  display: inline-flex;
+  align-items: center;
+  padding: 12px 28px;
+  border-radius: 10px;
+  font-size: 15px;
+  font-weight: 600;
+  text-decoration: none;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease;
+  cursor: pointer;
+}
+
+.home-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(0,0,0,0.2);
+}
+
+.home-btn-primary {
+  background: linear-gradient(135deg, rgba(59,130,246,0.9), rgba(99,102,241,0.9));
+  color: #fff !important;
+  border: none;
+}
+
+.home-btn-secondary {
+  background: transparent;
+  color: var(--text-color) !important;
+  border: 1px solid var(--border-color);
+}
+
+.home-btn-secondary:hover {
+  border-color: rgba(168,85,247,0.5);
+}
+
+/* Feature cards */
+.home-features {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr));
+  gap: 16px;
+  margin-bottom: 48px;
+}
+
+.home-feature-card {
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 14px;
+  padding: 24px 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+}
+
+.home-feature-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 8px 28px rgba(0,0,0,0.15);
+  border-color: rgba(168,85,247,0.25);
+}
+
+.home-feature-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  flex-shrink: 0;
+}
+
+.home-feature-title {
+  font-size: 16px;
+  font-weight: 700;
+  margin: 0;
+  letter-spacing: -0.01em;
+}
+
+.home-feature-desc {
+  font-size: 14px;
+  color: var(--muted-color);
+  margin: 0;
+  line-height: 1.55;
+  flex: 1;
+}
+
+.home-feature-link {
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: none;
+  margin-top: 4px;
+  transition: opacity 0.15s;
+}
+
+.home-feature-link:hover {
+  opacity: 0.75;
+}
+
+/* Stats strip */
+.home-stats {
+  display: flex;
+  justify-content: center;
+  gap: 0;
+  border: 1px solid var(--border-color);
+  border-radius: 14px;
+  overflow: hidden;
+  margin-bottom: 48px;
+}
+
+.home-stat {
+  flex: 1;
+  text-align: center;
+  padding: 24px 16px;
+  border-right: 1px solid var(--border-color);
+}
+
+.home-stat:last-child {
+  border-right: none;
+}
+
+.home-stat-value {
+  font-size: clamp(24px, 6vw, 36px);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  background: linear-gradient(135deg, rgba(59,130,246,0.9), rgba(168,85,247,0.9));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.home-stat-label {
+  font-size: 13px;
+  color: var(--muted-color);
+  margin-top: 4px;
+}
+
+/* ── Word token popup ──────────────────────────────────────────────────────── */
 
 .word-token {
   cursor: help;
@@ -49,40 +199,29 @@
   background: rgba(255, 230, 100, 0.25);
 }
 
-.word-token::after {
-  /* removed: tooltip is now a DOM node (.token-popup) for accessibility and to contain interactive actions */
-  content: none;
-}
+.word-token::after { content: none; }
+.word-token::before { content: none; }
 
-.word-token::before {
-  content: none;
-}
-
-/* keep legacy pseudo-element rules disabled (replaced by .token-popup) */
-/* Show pinyin above the word when explicit pinyin is enabled via DOM (ruby)
-   and style the small rt text */
 .word-token ruby {
-  /* Prefer the native ruby positioning, and as a robust fallback use a
-     column-reverse inline-flex so the <rt> appears above the base text. */
   ruby-position: over;
   display: inline-flex;
   flex-direction: column-reverse;
   align-items: center;
   line-height: 1;
-  gap: 0.06rem; /* tighten the gap so pinyin sits close to the char */
-  font-size: 1.04em; /* make the Chinese base slightly larger than surrounding text */
+  gap: 0.06rem;
+  font-size: 1.04em;
 }
 
 .word-token ruby rt {
-  font-size: 0.58em; /* smaller pinyin so it visually sits above cleanly */
+  font-size: 0.58em;
   color: var(--pinyin-color);
   line-height: 1;
   display: block;
-  transform: translateY(-0.02em); /* nudge pinyin slightly closer */
+  transform: translateY(-0.02em);
   font-weight: 500;
 }
 
-/* TOKEN POPUP (pinyin + actions) */
+/* TOKEN POPUP */
 .token-popup {
   position: absolute;
   bottom: 135%;
@@ -114,15 +253,8 @@
   transform: translateX(-50%) translateY(0);
 }
 
-.token-popup .popup-pinyin {
-  font-weight: 700;
-  font-size: 0.92em;
-}
-
-.token-popup .popup-english {
-  font-size: 0.82em;
-  color: var(--popup-muted);
-}
+.token-popup .popup-pinyin { font-weight: 700; font-size: 0.92em; }
+.token-popup .popup-english { font-size: 0.82em; color: var(--popup-muted); }
 
 .token-popup .popup-actions {
   display: flex;
@@ -132,7 +264,6 @@
 }
 
 .token-popup::after {
-  /* small arrow */
   content: '';
   position: absolute;
   bottom: -8px;
@@ -144,41 +275,9 @@
   filter: drop-shadow(0 -2px 4px rgba(0,0,0,0.06));
 }
 
-/* Keyboard focus should also reveal tooltip (for accessibility) */
-.word-token:focus::after,
-.word-token:focus::before {
-  opacity: 1;
-}
+.word-token:focus { outline: none; box-shadow: 0 0 0 3px rgba(100,149,255,0.18); }
 
-.word-token:focus {
-  outline: none;
-  box-shadow: 0 0 0 3px rgba(100,149,255,0.18);
-}
-
-/* Speak button inside popup */
-.token-popup .speak-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  height: 28px;
-  min-width: 36px;
-  padding: 4px 8px;
-  font-size: 16px;
-  background: var(--popup-bg);
-  border: 1px solid var(--border-color);
-  border-radius: 6px;
-  line-height: 1;
-  cursor: pointer;
-  transition: transform 140ms ease, opacity 120ms ease;
-  box-shadow: 0 2px 6px rgba(0,0,0,0.1);
-  z-index: 55;
-}
-
-.token-popup .speak-btn:hover {
-  transform: translateY(-2px) scale(1.08);
-}
-
-/* Save button inside popup (inline, part of the popup UI) */
+.token-popup .speak-btn,
 .token-popup .save-btn {
   display: inline-flex;
   align-items: center;
@@ -187,33 +286,28 @@
   min-width: 36px;
   padding: 4px 8px;
   font-size: 14px;
-  color: #ffb400; /* star color */
   background: var(--popup-bg);
   border: 1px solid var(--border-color);
   border-radius: 6px;
   line-height: 1;
   cursor: pointer;
-  transition: transform 140ms ease, opacity 120ms ease;
+  transition: transform 140ms ease;
   box-shadow: 0 2px 6px rgba(0,0,0,0.1);
   z-index: 55;
 }
 
+.token-popup .speak-btn { font-size: 16px; }
+.token-popup .save-btn { color: #ffb400; }
+
+.token-popup .speak-btn:hover,
 .token-popup .save-btn:hover {
-  transform: translateY(-2px) scale(1.04);
+  transform: translateY(-2px) scale(1.08);
 }
 
-.token-popup .save-btn[disabled] {
-  opacity: 0.6;
-  cursor: default;
-}
+.token-popup .save-btn[disabled] { opacity: 0.6; cursor: default; }
 
-/* ensure pinyin rt layer sits beneath popup */
-.word-token ruby rt {
-  position: relative;
-  z-index: 30;
-}
+.word-token ruby rt { position: relative; z-index: 30; }
 
-/* Saved confirmation as an inline badge inside the popup */
 .token-popup .saved-confirm {
   background: #2d8f2d;
   color: #fff;
@@ -222,10 +316,10 @@
   font-weight: 600;
   font-size: 0.82em;
   white-space: nowrap;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
 }
 
-/* Toggle button styling for cleaner single control */
+/* ── Learn toggle ──────────────────────────────────────────────────────────── */
+
 .learn-toggle {
   padding: 4px 8px;
   border-radius: 6px;
@@ -243,7 +337,26 @@
   font-weight: 600;
 }
 
-.learn-toggle[disabled] {
-  opacity: 0.5;
-  cursor: default;
+.learn-toggle[disabled] { opacity: 0.5; cursor: default; }
+
+/* ── Responsive ────────────────────────────────────────────────────────────── */
+
+@media (max-width: 600px) {
+  .home-hero {
+    padding: 40px 8px 36px;
+  }
+
+  .home-stats {
+    flex-direction: column;
+  }
+
+  .home-stat {
+    border-right: none;
+    border-bottom: 1px solid var(--border-color);
+    padding: 16px;
+  }
+
+  .home-stat:last-child {
+    border-bottom: none;
+  }
 }

@@ -49,14 +49,16 @@ function NavBar() {
   const navLinkStyle = (path: string): React.CSSProperties => ({
     display: 'flex',
     alignItems: 'center',
-    gap: 8,
-    padding: '10px 14px',
-    borderRadius: '6px',
+    gap: 6,
+    padding: '7px 12px',
+    borderRadius: '8px',
     textDecoration: 'none',
-    color: 'inherit',
+    color: isActive(path) ? 'var(--text-color)' : 'var(--muted-color)',
     backgroundColor: isActive(path) ? activeBg : 'transparent',
-    fontSize: 15,
+    fontSize: 14,
+    fontWeight: isActive(path) ? 600 : 400,
     whiteSpace: 'nowrap',
+    transition: 'color 0.15s, background-color 0.15s',
   })
 
   const navLinks = (
@@ -99,17 +101,28 @@ function NavBar() {
           display: 'flex',
           alignItems: 'center',
           gap: 12,
-          padding: '12px 16px',
-          borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
-          backgroundColor: 'rgba(0, 0, 0, 0.2)',
-          position: 'relative',
+          padding: '10px 20px',
+          borderBottom: '1px solid var(--border-color)',
+          backgroundColor: 'var(--bg-color)',
+          backdropFilter: 'blur(12px)',
+          WebkitBackdropFilter: 'blur(12px)',
+          position: 'sticky',
+          top: 0,
           zIndex: 100,
         }}
       >
         {/* Logo */}
         <Link to="/" style={{ display: 'flex', alignItems: 'center', gap: 10, textDecoration: 'none', color: 'inherit', flexShrink: 0 }}>
-          <span style={{ fontSize: 26, lineHeight: 1 }}>中</span>
-          <h1 className="navbar-title" style={{ margin: 0, fontSize: 20, fontWeight: 600 }}>Chinese Flashcards</h1>
+          <span style={{
+            fontSize: 26,
+            lineHeight: 1,
+            background: 'linear-gradient(135deg, rgba(59,130,246,0.9), rgba(168,85,247,0.9))',
+            WebkitBackgroundClip: 'text',
+            WebkitTextFillColor: 'transparent',
+            backgroundClip: 'text',
+            fontWeight: 700,
+          }}>中</span>
+          <h1 className="navbar-title" style={{ margin: 0, fontSize: 18, fontWeight: 700, letterSpacing: '-0.01em' }}>Chinese Flashcards</h1>
         </Link>
 
         {/* Desktop nav links */}
