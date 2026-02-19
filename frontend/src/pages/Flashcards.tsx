@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { convertPinyinStyle } from '../utils/pinyin';
 
@@ -70,6 +70,7 @@ export default function Flashcards() {
   const [studyLoading, setStudyLoading] = useState(false);
 
   const currentCard = cards[cardIndex] ?? null;
+  const submittingRef = useRef(false);
 
   // ── Fetch deck stats ───────────────────────────────────────────────────────
 
@@ -126,8 +127,9 @@ export default function Flashcards() {
 
   // ── Submit review ──────────────────────────────────────────────────────────
 
-  const submitReview = async (quality: 0 | 2 | 4 | 5) => {
-    if (!currentCard || submitting || !accessToken) return;
+  const submitReview = useCallback(async (quality: 2 | 5) => {
+    if (!currentCard || submittingRef.current || !accessToken) return;
+    submittingRef.current = true;
     setSubmitting(true);
     try {
       await fetch(`${API_URL}/api/srs/review`, {
@@ -143,8 +145,15 @@ export default function Flashcards() {
       setSessionCorrect(c => c + (passed ? 1 : 0));
       setSessionTotal(t => t + 1);
 
+      setCards(prev => {
+        const next = [...prev];
+        next[cardIndex] = { ...next[cardIndex], isNew: false };
+        return next;
+      });
+
       if (cardIndex + 1 >= cards.length) {
         setCardFace('done');
+        fetchDecks(); // refresh studied counts immediately when session ends
       } else {
         setCardIndex(i => i + 1);
         setCardFace('front');
@@ -152,9 +161,27 @@ export default function Flashcards() {
     } catch {
       alert('Failed to save review. Please try again.');
     } finally {
+      submittingRef.current = false;
       setSubmitting(false);
     }
-  };
+  }, [currentCard, accessToken, cardIndex, cards.length, fetchDecks]);
+
+  // ── Keyboard shortcuts ─────────────────────────────────────────────────────
+
+  useEffect(() => {
+    const handleKey = (e: KeyboardEvent) => {
+      if (view !== 'study' || cardFace === 'done') return;
+      if (e.key === ' ' || e.key === 'Enter') {
+        if (cardFace === 'front') setCardFace('back');
+      } else if (e.key === 'ArrowLeft') {
+        if (cardFace === 'back') submitReview(2); // Hard
+      } else if (e.key === 'ArrowRight') {
+        if (cardFace === 'back') submitReview(5); // Easy
+      }
+    };
+    window.addEventListener('keydown', handleKey);
+    return () => window.removeEventListener('keydown', handleKey);
+  }, [view, cardFace, submitReview]);
 
   const backToDecks = () => {
     setView('decks');
@@ -360,28 +387,26 @@ export default function Flashcards() {
               Show Answer
             </button>
           ) : (
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 10 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
               {(
                 [
-                  { label: 'Again', quality: 0 as const, color: 'rgba(220, 38, 38, 0.85)', hint: '< 1d' },
-                  { label: 'Hard', quality: 2 as const, color: 'rgba(245, 158, 11, 0.85)', hint: '~1d' },
-                  { label: 'Good', quality: 4 as const, color: 'rgba(59, 130, 246, 0.85)', hint: `${currentCard.repetitions === 0 ? '1d' : currentCard.repetitions === 1 ? '6d' : Math.round(currentCard.interval * currentCard.easeFactor) + 'd'}` },
-                  { label: 'Easy', quality: 5 as const, color: 'rgba(16, 185, 129, 0.85)', hint: 'longer' },
+                  { label: 'Hard', quality: 2 as const, color: 'rgba(245, 158, 11, 0.85)', key: '←' },
+                  { label: 'Easy', quality: 5 as const, color: 'rgba(16, 185, 129, 0.85)', key: '→' },
                 ] as const
-              ).map(({ label, quality, color, hint }) => (
+              ).map(({ label, quality, color, key }) => (
                 <button
                   key={label}
                   onClick={() => submitReview(quality)}
                   disabled={submitting}
                   style={{
-                    padding: '12px 8px',
+                    padding: '14px 8px',
                     backgroundColor: color,
                     border: 'none',
                     borderRadius: 8,
                     cursor: submitting ? 'not-allowed' : 'pointer',
                     color: '#fff',
                     fontWeight: 600,
-                    fontSize: 14,
+                    fontSize: 16,
                     opacity: submitting ? 0.6 : 1,
                     display: 'flex',
                     flexDirection: 'column',
@@ -390,7 +415,7 @@ export default function Flashcards() {
                   }}
                 >
                   <span>{label}</span>
-                  <span style={{ fontSize: 11, opacity: 0.85 }}>{hint}</span>
+                  <span style={{ fontSize: 11, opacity: 0.75 }}>{key}</span>
                 </button>
               ))}
             </div>
