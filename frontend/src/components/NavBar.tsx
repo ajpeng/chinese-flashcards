@@ -8,7 +8,7 @@ function NavBar() {
   const location = useLocation()
   const navigate = useNavigate()
   const [theme, setTheme] = useTheme()
-  const { user, logout, loginWithPatreon } = useAuth()
+  const { user, logout } = useAuth()
   const [showSettings, setShowSettings] = useState(false)
 
   // Reset dropdown when location changes (navigation)
