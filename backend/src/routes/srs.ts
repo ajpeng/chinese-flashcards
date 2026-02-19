@@ -188,6 +188,57 @@ router.get(
   }
 );
 
+// GET /api/srs/preview/:level — browse all words in a deck without studying
+router.get(
+  '/preview/:level',
+  requireAuth,
+  param('level').isInt({ min: 1, max: 6 }).withMessage('Level must be 1-6'),
+  async (req: Request, res: Response) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      res.status(400).json({ errors: errors.array() });
+      return;
+    }
+
+    try {
+      const userId = req.user!.userId;
+      const level = parseInt(req.params.level, 10);
+
+      const allWords = await prisma.word.findMany({
+        where: { source: 'hsk', hskLevel: level },
+        select: { id: true, simplified: true, pinyin: true, english: true, hskLevel: true },
+        orderBy: { id: 'asc' },
+      });
+
+      const existingCards = await prisma.flashcard.findMany({
+        where: { userId, word: { source: 'hsk', hskLevel: level } },
+        select: { wordId: true, interval: true, nextReviewAt: true },
+      });
+
+      const cardByWordId = new Map(existingCards.map(c => [c.wordId, c]));
+
+      const previewCards = allWords.map(w => {
+        const card = cardByWordId.get(w.id);
+        return {
+          wordId: w.id,
+          simplified: w.simplified,
+          pinyin: w.pinyin ?? '',
+          english: w.english ?? '',
+          hskLevel: level,
+          isNew: !card,
+          interval: card?.interval ?? 0,
+          nextReviewAt: card?.nextReviewAt ?? null,
+        };
+      });
+
+      res.json(previewCards);
+    } catch (error) {
+      console.error('SRS preview error:', error);
+      res.status(500).json({ error: 'Failed to load preview cards' });
+    }
+  }
+);
+
 // POST /api/srs/review — submit a card review and update SM-2 scheduling
 router.post(
   '/review',

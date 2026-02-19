@@ -26,7 +26,7 @@ type StudyCard = {
   isNew: boolean;
 };
 
-type View = 'decks' | 'study';
+type View = 'decks' | 'study' | 'preview';
 type CardFace = 'front' | 'back' | 'done';
 
 const HSK_COLORS: Record<number, string> = {
@@ -68,6 +68,11 @@ export default function Flashcards() {
   const [sessionTotal, setSessionTotal] = useState(0);
   const [submitting, setSubmitting] = useState(false);
   const [studyLoading, setStudyLoading] = useState(false);
+
+  // Preview session
+  const [previewLevel, setPreviewLevel] = useState(0);
+  const [previewCards, setPreviewCards] = useState<StudyCard[]>([]);
+  const [previewLoading, setPreviewLoading] = useState(false);
 
   const currentCard = cards[cardIndex] ?? null;
   const submittingRef = useRef(false);
@@ -122,6 +127,28 @@ export default function Flashcards() {
       alert('Could not load study cards. Please try again.');
     } finally {
       setStudyLoading(false);
+    }
+  };
+
+  // ── Start preview ─────────────────────────────────────────────────────────
+
+  const startPreview = async (level: number) => {
+    if (!accessToken) return;
+    setPreviewLoading(true);
+    try {
+      const res = await fetch(`${API_URL}/api/srs/preview/${level}`, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+        credentials: 'include',
+      });
+      if (!res.ok) throw new Error('Failed to load preview cards');
+      const data: StudyCard[] = await res.json();
+      setPreviewCards(data);
+      setPreviewLevel(level);
+      setView('preview');
+    } catch {
+      alert('Could not load preview. Please try again.');
+    } finally {
+      setPreviewLoading(false);
     }
   };
 
@@ -425,6 +452,90 @@ export default function Flashcards() {
     );
   }
 
+  // ── Preview ────────────────────────────────────────────────────────────────
+
+  if (view === 'preview') {
+    const levelColor = HSK_COLORS[previewLevel];
+    return (
+      <div style={{ maxWidth: 640, margin: '0 auto', padding: '0 24px' }}>
+        {/* Header */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 24, paddingTop: 8 }}>
+          <button
+            onClick={() => { setView('decks'); setPreviewCards([]); }}
+            style={{
+              background: 'transparent',
+              border: '1px solid var(--border-color)',
+              padding: '6px 14px',
+              borderRadius: 6,
+              cursor: 'pointer',
+              color: 'inherit',
+              fontSize: 14,
+              whiteSpace: 'nowrap',
+            }}
+          >
+            ← Decks
+          </button>
+          <div>
+            <div style={{ fontWeight: 600, fontSize: 16 }}>
+              HSK {previewLevel} · {HSK_LABELS[previewLevel]}
+            </div>
+            <div style={{ fontSize: 13, color: 'var(--muted-color)' }}>
+              {previewCards.length} words
+            </div>
+          </div>
+        </div>
+
+        {/* Word list */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {previewCards.map(card => (
+            <div
+              key={card.wordId}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                background: 'var(--bg-color, rgba(255,255,255,0.03))',
+                border: '1px solid var(--border-color)',
+                borderRadius: 10,
+                padding: '12px 16px',
+                gap: 12,
+              }}
+            >
+              {/* Chinese + pinyin */}
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, minWidth: 0 }}>
+                <span style={{ fontSize: 28, fontWeight: 500, color: levelColor, flexShrink: 0 }}>
+                  {card.simplified}
+                </span>
+                <span style={{ fontSize: 14, color: 'var(--muted-color)', fontStyle: 'italic', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {convertPinyinStyle(card.pinyin, pinyinStyle)}
+                </span>
+              </div>
+
+              {/* English + badge */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+                <span style={{ fontSize: 14, color: 'var(--text-color)', textAlign: 'right' }}>
+                  {card.english || '—'}
+                </span>
+                <span
+                  style={{
+                    fontSize: 11,
+                    padding: '2px 8px',
+                    borderRadius: 20,
+                    whiteSpace: 'nowrap',
+                    backgroundColor: card.isNew ? 'rgba(16, 185, 129, 0.15)' : 'rgba(59, 130, 246, 0.15)',
+                    color: card.isNew ? 'rgba(16, 185, 129, 1)' : 'rgba(59, 130, 246, 1)',
+                  }}
+                >
+                  {card.isNew ? 'New' : `${card.interval}d`}
+                </span>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
   // ── Deck selection ─────────────────────────────────────────────────────────
 
   return (
@@ -553,25 +664,44 @@ export default function Flashcards() {
                   )}
                 </div>
 
-                {/* Study button */}
-                <button
-                  onClick={() => startStudy(level)}
-                  disabled={!canStudy || studyLoading}
-                  style={{
-                    marginTop: 4,
-                    padding: '10px',
-                    backgroundColor: canStudy ? color : 'rgba(128, 128, 128, 0.3)',
-                    border: 'none',
-                    borderRadius: 8,
-                    cursor: canStudy && !studyLoading ? 'pointer' : 'not-allowed',
-                    color: canStudy ? '#fff' : 'var(--muted-color)',
-                    fontWeight: 600,
-                    fontSize: 14,
-                    opacity: studyLoading ? 0.7 : 1,
-                  }}
-                >
-                  {studyLoading ? 'Loading…' : deck.dueCards > 0 ? `Study (${deck.dueCards} due)` : 'Study'}
-                </button>
+                {/* Buttons */}
+                <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+                  <button
+                    onClick={() => startStudy(level)}
+                    disabled={!canStudy || studyLoading}
+                    style={{
+                      flex: 1,
+                      padding: '10px',
+                      backgroundColor: canStudy ? color : 'rgba(128, 128, 128, 0.3)',
+                      border: 'none',
+                      borderRadius: 8,
+                      cursor: canStudy && !studyLoading ? 'pointer' : 'not-allowed',
+                      color: canStudy ? '#fff' : 'var(--muted-color)',
+                      fontWeight: 600,
+                      fontSize: 14,
+                      opacity: studyLoading ? 0.7 : 1,
+                    }}
+                  >
+                    {studyLoading ? 'Loading…' : deck.dueCards > 0 ? `Study (${deck.dueCards} due)` : 'Study'}
+                  </button>
+                  <button
+                    onClick={() => startPreview(level)}
+                    disabled={!canStudy || previewLoading}
+                    title="Browse all words"
+                    style={{
+                      padding: '10px 12px',
+                      backgroundColor: 'transparent',
+                      border: `1px solid var(--border-color)`,
+                      borderRadius: 8,
+                      cursor: canStudy && !previewLoading ? 'pointer' : 'not-allowed',
+                      color: canStudy ? 'var(--text-color)' : 'var(--muted-color)',
+                      fontSize: 14,
+                      opacity: previewLoading ? 0.7 : 1,
+                    }}
+                  >
+                    Browse
+                  </button>
+                </div>
               </div>
             );
           })}
