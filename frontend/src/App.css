@@ -189,14 +189,15 @@
 /* ── Word token popup ──────────────────────────────────────────────────────── */
 
 .word-token {
-  cursor: help;
+  cursor: pointer;
   transition: background 120ms;
   position: relative;
-  display: inline-block;
+  display: inline;
+  border-radius: 3px;
 }
 
 .word-token:hover {
-  background: rgba(255, 230, 100, 0.25);
+  background: rgba(168, 85, 247, 0.15) !important;
 }
 
 .word-token::after { content: none; }
@@ -209,39 +210,43 @@
   align-items: center;
   line-height: 1;
   gap: 0.06rem;
-  font-size: 1.04em;
+  font-size: 1em;
 }
 
 .word-token ruby rt {
-  font-size: 0.58em;
+  font-size: 0.5em;
   color: var(--pinyin-color);
   line-height: 1;
   display: block;
-  transform: translateY(-0.02em);
   font-weight: 500;
+  letter-spacing: 0.03em;
 }
 
 /* TOKEN POPUP */
 .token-popup {
   position: absolute;
-  bottom: 135%;
+  bottom: calc(100% + 8px);
   left: 50%;
-  transform: translateX(-50%) translateY(6px);
+  transform: translateX(-50%) translateY(4px);
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 6px;
-  padding: 8px 10px;
-  border-radius: 8px;
+  gap: 5px;
+  padding: 10px 12px;
+  border-radius: 10px;
   background: var(--popup-bg);
   color: var(--popup-text);
-  box-shadow: 0 8px 24px rgba(0,0,0,0.3);
-  min-width: 120px;
+  border: 1px solid var(--border-color);
+  box-shadow: 0 12px 32px rgba(0,0,0,0.25), 0 2px 8px rgba(0,0,0,0.15);
+  min-width: 130px;
+  max-width: 200px;
   opacity: 0;
   visibility: hidden;
   pointer-events: none;
-  z-index: 50;
-  transition: opacity 120ms ease, transform 120ms ease, visibility 120ms ease;
+  z-index: 200;
+  transition: opacity 100ms ease, transform 100ms ease, visibility 100ms ease;
+  text-align: center;
+  white-space: nowrap;
 }
 
 .word-token:hover .token-popup,
@@ -253,68 +258,78 @@
   transform: translateX(-50%) translateY(0);
 }
 
-.token-popup .popup-pinyin { font-weight: 700; font-size: 0.92em; }
-.token-popup .popup-english { font-size: 0.82em; color: var(--popup-muted); }
+.token-popup .popup-pinyin {
+  font-weight: 700;
+  font-size: 0.95em;
+  color: var(--popup-text);
+  letter-spacing: 0.02em;
+}
+.token-popup .popup-english {
+  font-size: 0.8em;
+  color: var(--popup-muted);
+  max-width: 180px;
+  white-space: normal;
+  text-align: center;
+  line-height: 1.3;
+}
 
 .token-popup .popup-actions {
   display: flex;
-  gap: 8px;
+  gap: 6px;
   align-items: center;
-  margin-top: 4px;
+  margin-top: 2px;
 }
 
 .token-popup::after {
   content: '';
   position: absolute;
-  bottom: -8px;
+  bottom: -7px;
   left: 50%;
   transform: translateX(-50%);
-  border-width: 8px 8px 0 8px;
+  border-width: 7px 7px 0 7px;
   border-style: solid;
   border-color: var(--popup-bg) transparent transparent transparent;
-  filter: drop-shadow(0 -2px 4px rgba(0,0,0,0.06));
 }
 
-.word-token:focus { outline: none; box-shadow: 0 0 0 3px rgba(100,149,255,0.18); }
+.word-token:focus { outline: none; }
 
 .token-popup .speak-btn,
 .token-popup .save-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  height: 28px;
-  min-width: 36px;
-  padding: 4px 8px;
-  font-size: 14px;
-  background: var(--popup-bg);
+  height: 26px;
+  min-width: 32px;
+  padding: 3px 7px;
+  font-size: 13px;
+  background: transparent;
   border: 1px solid var(--border-color);
   border-radius: 6px;
   line-height: 1;
   cursor: pointer;
-  transition: transform 140ms ease;
-  box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+  transition: background 120ms, transform 120ms;
   z-index: 55;
+  color: var(--popup-text);
 }
 
-.token-popup .speak-btn { font-size: 16px; }
-.token-popup .save-btn { color: #ffb400; }
+.token-popup .speak-btn { font-size: 15px; }
+.token-popup .save-btn { color: rgb(245,158,11); }
 
-.token-popup .speak-btn:hover,
-.token-popup .save-btn:hover {
-  transform: translateY(-2px) scale(1.08);
-}
+.token-popup .speak-btn:hover { background: rgba(255,255,255,0.08); transform: scale(1.1); }
+.token-popup .save-btn:hover { background: rgba(245,158,11,0.12); transform: scale(1.1); }
 
-.token-popup .save-btn[disabled] { opacity: 0.6; cursor: default; }
+.token-popup .save-btn[disabled] { opacity: 0.5; cursor: default; transform: none; }
 
 .word-token ruby rt { position: relative; z-index: 30; }
 
 .token-popup .saved-confirm {
-  background: #2d8f2d;
-  color: #fff;
-  padding: 4px 8px;
+  background: rgba(16,185,129,0.15);
+  color: rgb(16,185,129);
+  border: 1px solid rgba(16,185,129,0.3);
+  padding: 3px 8px;
   border-radius: 6px;
   font-weight: 600;
-  font-size: 0.82em;
+  font-size: 0.8em;
   white-space: nowrap;
 }
 

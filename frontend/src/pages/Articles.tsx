@@ -39,12 +39,10 @@ function tokenize(content: string, words: Word[]): Token[] {
   if (!content) return [];
   const { map, maxLen } = buildLookup(words || []);
   const tokens: Token[] = [];
-  const isHan = (ch: string) => /[\u4E00-\u9FFF]/.test(ch); // basic CJK check
+  const isHan = (ch: string) => /[\u4E00-\u9FFF]/.test(ch);
   let i = 0;
-
   while (i < content.length) {
     const ch = content[i];
-
     if (!isHan(ch)) {
       let j = i + 1;
       while (j < content.length && !isHan(content[j])) j++;
@@ -52,19 +50,13 @@ function tokenize(content: string, words: Word[]): Token[] {
       i = j;
       continue;
     }
-
     let matched: Word | undefined;
     let matchedLen = 0;
     for (let len = Math.min(maxLen, content.length - i); len > 0; len--) {
       const sub = content.substr(i, len);
       const w = map.get(sub);
-      if (w) { 
-        matched = w; 
-        matchedLen = len; 
-        break; 
-      }
+      if (w) { matched = w; matchedLen = len; break; }
     }
-
     if (matched) {
       tokens.push({ text: content.substr(i, matchedLen), word: matched });
       i += matchedLen;
@@ -73,12 +65,64 @@ function tokenize(content: string, words: Word[]): Token[] {
       i++;
     }
   }
-
   return tokens;
 }
 
-function ArticleContent({ content, words, showPinyin = false, onToggle, markingSet, savedSet, learnedSet, pinyinStyle = 'marks', fontSize = 'medium', highlightedTokenIndex = -1, selectedVoice = '', speechRate = 0.8, onStartReadingFromToken, textVariant = 'simplified', backendTokens = [], wordTimings = [] }: { content: string; words: Word[]; showPinyin?: boolean; onToggle?: (wordId: number) => Promise<boolean>; markingSet?: Set<number>; savedSet?: Set<number>; learnedSet?: Set<number>; pinyinStyle?: 'marks' | 'numbers'; fontSize?: 'small' | 'medium' | 'large' | 'xlarge'; highlightedTokenIndex?: number; selectedVoice?: string; speechRate?: number; onStartReadingFromToken?: (tokenIndex: number) => void; textVariant?: 'simplified' | 'traditional'; backendTokens?: Array<{ text: string; word?: Word; index: number }>; wordTimings?: Array<{ word: string; start: number; duration: number; audioOffset: number }> }) {
-  // Use backend tokens if available, otherwise fall back to frontend tokenization
+// ── HSK level color palette ───────────────────────────────────────────────────
+const HSK_COLORS: Record<number, { bg: string; text: string; border: string }> = {
+  1: { bg: 'rgba(16,185,129,0.12)', text: 'rgb(16,185,129)', border: 'rgba(16,185,129,0.3)' },
+  2: { bg: 'rgba(59,130,246,0.12)', text: 'rgb(59,130,246)', border: 'rgba(59,130,246,0.3)' },
+  3: { bg: 'rgba(168,85,247,0.12)', text: 'rgb(168,85,247)', border: 'rgba(168,85,247,0.3)' },
+  4: { bg: 'rgba(245,158,11,0.12)', text: 'rgb(245,158,11)', border: 'rgba(245,158,11,0.3)' },
+  5: { bg: 'rgba(239,68,68,0.12)', text: 'rgb(239,68,68)', border: 'rgba(239,68,68,0.3)' },
+  6: { bg: 'rgba(236,72,153,0.12)', text: 'rgb(236,72,153)', border: 'rgba(236,72,153,0.3)' },
+};
+
+function HskBadge({ level }: { level: number }) {
+  const c = HSK_COLORS[level] ?? HSK_COLORS[1];
+  return (
+    <span style={{
+      display: 'inline-flex', alignItems: 'center',
+      padding: '2px 8px', borderRadius: 99,
+      fontSize: 11, fontWeight: 700, letterSpacing: '0.04em',
+      background: c.bg, color: c.text, border: `1px solid ${c.border}`,
+    }}>
+      HSK {level}
+    </span>
+  );
+}
+
+// ── Article content renderer ──────────────────────────────────────────────────
+interface ArticleContentProps {
+  content: string;
+  words: Word[];
+  showPinyin?: boolean;
+  onToggle?: (wordId: number) => Promise<boolean>;
+  markingSet?: Set<number>;
+  savedSet?: Set<number>;
+  learnedSet?: Set<number>;
+  pinyinStyle?: 'marks' | 'numbers';
+  fontSize?: 'small' | 'medium' | 'large' | 'xlarge';
+  highlightedTokenIndex?: number;
+  selectedVoice?: string;
+  speechRate?: number;
+  onStartReadingFromToken?: (tokenIndex: number) => void;
+  textVariant?: 'simplified' | 'traditional';
+  backendTokens?: Array<{ text: string; word?: Word; index: number }>;
+  wordTimings?: Array<{ word: string; start: number; duration: number; audioOffset: number }>;
+}
+
+function ArticleContent({
+  content, words, showPinyin = false, onToggle,
+  markingSet, savedSet, learnedSet,
+  pinyinStyle = 'marks', fontSize = 'medium',
+  highlightedTokenIndex = -1,
+  selectedVoice = '', speechRate = 0.8,
+  onStartReadingFromToken,
+  textVariant = 'simplified',
+  backendTokens = [], wordTimings = [],
+}: ArticleContentProps) {
+
   const tokens = useMemo(() => {
     return backendTokens.length > 0 ? backendTokens : tokenize(content, words);
   }, [backendTokens, content, words]);
@@ -87,317 +131,417 @@ function ArticleContent({ content, words, showPinyin = false, onToggle, markingS
     try {
       const response = await fetch(`${API_URL}/api/tts`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          text: text,
-          voice: selectedVoice,
-          rate: speechRate.toString()
-        })
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text, voice: selectedVoice, rate: speechRate.toString() }),
       });
-      
-      if (!response.ok) {
-        throw new Error(`TTS request failed: ${response.statusText}`);
-      }
-      
+      if (!response.ok) throw new Error(`TTS request failed: ${response.statusText}`);
       const data = await response.json();
-      
-      // Create audio element and play
-      const audio = new Audio(`data:audio/wav;base64,${data.audioData}`);
-      audio.play();
+      new Audio(`data:audio/wav;base64,${data.audioData}`).play();
     } catch (error) {
       console.error('TTS Error:', error);
       alert('Failed to generate speech');
     }
   };
 
-  const getFontSizeValue = (size: 'small' | 'medium' | 'large' | 'xlarge'): string => {
-    switch (size) {
-      case 'small': return '0.9em';
-      case 'medium': return '1em';
-      case 'large': return '1.2em';
-      case 'xlarge': return '1.4em';
-      default: return '1em';
+  const fontSizeMap: Record<string, string> = {
+    small: 'clamp(16px, 3.5vw, 18px)',
+    medium: 'clamp(18px, 4vw, 22px)',
+    large: 'clamp(20px, 4.5vw, 26px)',
+    xlarge: 'clamp(22px, 5vw, 30px)',
+  };
+  const fontSizeVal = fontSizeMap[fontSize] ?? fontSizeMap.medium;
+
+  const renderItems = wordTimings.length > 0
+    ? wordTimings
+    : tokens.map((t, idx) => ({ word: t.text, timingIndex: idx, tokenData: t }));
+
+  const renderToken = (
+    key: string,
+    text: string,
+    wordData: Word | undefined,
+    idx: number,
+    isHighlighted: boolean,
+  ) => {
+    const hasWord = !!wordData;
+    const isLearned = hasWord && learnedSet?.has(wordData!.id);
+
+    const tokenEl = showPinyin ? (
+      <ruby>
+        {convertChineseText(text, textVariant)}
+        <rt style={{ fontSize: '0.5em', color: 'var(--pinyin-color)', letterSpacing: '0.03em' }}>
+          {hasWord ? convertPinyinStyle(wordData!.pinyin, pinyinStyle) : '\u00A0'}
+        </rt>
+      </ruby>
+    ) : (
+      <>{convertChineseText(text, textVariant)}</>
+    );
+
+    if (!hasWord) {
+      return <span key={key} style={{ whiteSpace: 'pre-wrap' }}>{tokenEl}</span>;
     }
+
+    return (
+      <span
+        key={key}
+        className="word-token"
+        tabIndex={0}
+        aria-label={`${wordData!.simplified}, pinyin ${convertPinyinStyle(wordData!.pinyin, pinyinStyle)}, ${wordData!.english}`}
+        style={{
+          cursor: 'pointer',
+          borderRadius: 3,
+          background: isHighlighted
+            ? 'rgba(34,197,94,0.45)'
+            : isLearned
+              ? 'rgba(59,130,246,0.12)'
+              : 'transparent',
+          borderBottom: isLearned
+            ? '2px solid rgba(59,130,246,0.4)'
+            : '1px dotted rgba(150,150,150,0.5)',
+          transition: 'background 0.15s',
+          paddingBottom: showPinyin ? 0 : 1,
+        }}
+        onClick={(e) => { e.stopPropagation(); speak(wordData!.simplified); }}
+        onDoubleClick={onStartReadingFromToken ? (e) => { e.stopPropagation(); onStartReadingFromToken(idx); } : undefined}
+      >
+        {tokenEl}
+        <span className="token-popup" role="tooltip">
+          <span className="popup-pinyin">{convertPinyinStyle(wordData!.pinyin, pinyinStyle)}</span>
+          <span className="popup-english">{wordData!.english}</span>
+          <span className="popup-actions">
+            <button type="button" className="speak-btn" onClick={() => speak(wordData!.simplified)} title="Listen">🔊</button>
+            {onToggle && (
+              <button
+                type="button"
+                className="save-btn"
+                onClick={async () => { await onToggle(wordData!.id); }}
+                disabled={markingSet?.has(wordData!.id)}
+                title={isLearned ? 'Unlearn word' : 'Save word'}
+                aria-pressed={isLearned}
+              >
+                {markingSet?.has(wordData!.id) ? '⏳' : isLearned ? '★' : '☆'}
+              </button>
+            )}
+            {savedSet?.has(wordData!.id) && <span className="saved-confirm">Saved!</span>}
+          </span>
+        </span>
+      </span>
+    );
   };
 
-  // Use wordTimings as primary source if available, otherwise fall back to tokens
-  const renderItems = wordTimings.length > 0 ? wordTimings : tokens.map((t, idx) => ({ word: t.text, timingIndex: idx, tokenData: t }));
-
   return (
-    <div style={{ lineHeight: 1.6, fontSize: getFontSizeValue(fontSize), textAlign: 'left' }}>
+    <div style={{
+      fontSize: fontSizeVal,
+      lineHeight: showPinyin ? 2.6 : 1.9,
+      letterSpacing: '0.03em',
+      textAlign: 'justify',
+      wordBreak: 'break-word',
+    }}>
       {renderItems.map((item, idx) => {
-        // For timing-based rendering
         if ('word' in item && 'start' in item) {
-          const timing = item;
-          const wordText = timing.word;
-          const isHighlighted = idx === highlightedTokenIndex;
-          
-          // Try to find word data from the original tokens/words array for definitions
-          const matchingWord = words.find(w => w.simplified === wordText);
-          const key = matchingWord ? `w-${matchingWord.id}-${idx}` : `t-${idx}`;
-
-          return (
-            <span
-              key={key}
-              data-pinyin={matchingWord?.pinyin ?? ''}
-              data-english={matchingWord?.english ?? ''}
-              style={{
-                cursor: matchingWord ? 'pointer' : 'default',
-                background: isHighlighted ? 'rgba(34, 197, 94, 0.6)' : (matchingWord ? 'rgba(255, 255, 0, 0.06)' : 'transparent'),
-                borderBottom: matchingWord ? '1px solid rgba(255, 255, 255, 0.15)' : 'none',
-                marginRight: matchingWord ? '2px' : '0',
-                transition: 'background 0.2s ease',
-              }}
-              className="word-token"
-              aria-label={matchingWord ? `${matchingWord.simplified}, pinyin ${convertPinyinStyle(matchingWord.pinyin, pinyinStyle)}, ${matchingWord.english}` : undefined}
-              tabIndex={matchingWord ? 0 : -1}
-              title={matchingWord ? `${convertPinyinStyle(matchingWord.pinyin, pinyinStyle)} — ${matchingWord.english}` : undefined}
-              onClick={matchingWord ? (e) => {
-                e.stopPropagation();
-                speak(matchingWord.simplified);
-              } : undefined}
-              onDoubleClick={matchingWord && onStartReadingFromToken ? (e) => {
-                e.stopPropagation();
-                onStartReadingFromToken(idx);
-              } : undefined}
-            >
-              {showPinyin && matchingWord ? (
-                <ruby style={{ lineHeight: 2.2 }}>
-                  {convertChineseText(wordText, textVariant)}
-                  <rt style={{ fontSize: '0.6em', opacity: 0.9, marginBottom: '2px' }}>
-                    {convertPinyinStyle(matchingWord.pinyin, pinyinStyle)}
-                  </rt>
-                </ruby>
-              ) : (
-                convertChineseText(wordText, textVariant)
-              )}
-
-              {matchingWord && (
-                <div className="token-popup" role="tooltip">
-                  <div className="popup-text">
-                    <div className="popup-pinyin">{convertPinyinStyle(matchingWord.pinyin, pinyinStyle)}</div>
-                    <div className="popup-english">{matchingWord.english}</div>
-                  </div>
-                  <div className="popup-actions">
-                    <button
-                      type="button"
-                      className="speak-btn"
-                      onClick={() => speak(matchingWord.simplified)}
-                      title="Listen to pronunciation"
-                    >
-                      🔊
-                    </button>
-                    {onToggle && (
-                      <>
-                        <button
-                          type="button"
-                          className={`learn-btn ${learnedSet?.has(matchingWord.id) ? 'learned' : ''}`}
-                          onClick={() => onToggle(matchingWord.id)}
-                          disabled={markingSet?.has(matchingWord.id)}
-                          title={learnedSet?.has(matchingWord.id) ? 'Mark as not learned' : 'Mark as learned'}
-                        >
-                          {markingSet?.has(matchingWord.id) ? '⏳' : (learnedSet?.has(matchingWord.id) ? '✓' : '📚')}
-                        </button>
-                      </>
-                    )}
-                  </div>
-                </div>
-              )}
-            </span>
-          );
-        } 
-        
-        // Fallback to token-based rendering when no timings available
+          const timing = item as { word: string; start: number; duration: number; audioOffset: number };
+          const wordData = words.find(w => w.simplified === timing.word);
+          const key = wordData ? `w-${wordData.id}-${idx}` : `t-${idx}`;
+          return renderToken(key, timing.word, wordData, idx, idx === highlightedTokenIndex);
+        }
         const t = (item as any).tokenData || item;
         const key = t.word ? `w-${t.word.id}-${idx}` : `t-${idx}`;
-        const isHighlighted = idx === highlightedTokenIndex;
-
-        if (showPinyin) {
-          // When pinyin is shown, render every token as a ruby so the pinyin
-          // line stays aligned; and include a popup that contains pinyin + actions
-          return (
-            <span
-              key={key}
-              data-pinyin={t.word?.pinyin ?? ''}
-              data-english={t.word?.english ?? ''}
-              style={{
-                cursor: t.word ? 'pointer' : 'default',
-                background: isHighlighted ? 'rgba(34, 197, 94, 0.6)' : (t.word ? 'rgba(255, 255, 0, 0.06)' : 'transparent'),
-                borderBottom: t.word ? '1px solid rgba(255, 255, 255, 0.15)' : 'none',
-                marginRight: t.word ? '2px' : '0',
-                transition: 'background 0.2s ease',
-              }}
-              className="word-token"
-              aria-label={t.word ? `${t.word.simplified}, pinyin ${convertPinyinStyle(t.word.pinyin, pinyinStyle)}, ${t.word.english}` : undefined}
-              tabIndex={t.word ? 0 : -1}
-              title={t.word ? `${convertPinyinStyle(t.word.pinyin, pinyinStyle)} — ${t.word.english}` : undefined}
-              onClick={t.word ? (e) => {
-                e.stopPropagation();
-                speak(t.word!.simplified);
-              } : undefined}
-              onDoubleClick={t.word && onStartReadingFromToken ? (e) => {
-                e.stopPropagation();
-                onStartReadingFromToken(idx);
-              } : undefined}
-            >
-              <ruby style={{ lineHeight: 2.2 }}>
-                {convertChineseText(t.text, textVariant)}
-                <rt style={{ fontSize: '0.6em', opacity: 0.9, marginBottom: '2px' }}>{t.word ? convertPinyinStyle(t.word.pinyin, pinyinStyle) : '\u00A0'}</rt>
-              </ruby>
-
-              {t.word && (
-                <div className="token-popup" role="tooltip">
-                  <div className="popup-text">
-                    <div className="popup-pinyin">{convertPinyinStyle(t.word.pinyin, pinyinStyle)}</div>
-                    <div className="popup-english">{t.word.english}</div>
-                  </div>
-                  <div className="popup-actions">
-                                      <button
-                                        type="button"
-                                        className="speak-btn"
-                                        onClick={() => {
-                                          speak(t.word!.simplified);
-                                        }}
-                                        title="Listen to pronunciation"
-                                      >
-                                        🔊
-                                      </button>
-                    
-                                      {onToggle && (
-                                        <button
-                                          type="button"
-                                          className="save-btn"
-                                          onClick={async () => {
-                                            await onToggle(t.word!.id);
-                                          }}
-                                          disabled={markingSet?.has(t.word.id)}
-                                          title={learnedSet?.has(t.word.id) ? 'Unlearn word' : 'Save word'}
-                                        >
-                                          {learnedSet?.has(t.word.id) ? '★' : '☆'}
-                                        </button>
-                                      )}
-                    {savedSet?.has(t.word.id) && (
-                      <span className="saved-confirm">Saved!</span>
-                    )}
-                  </div>
-                </div>
-              )}
-            </span>
-          );
-        }
-
-        // Default (no pinyin shown): render normally with optional popup for actions
-        return t.word ? (
-          <span
-            key={key}
-            data-pinyin={t.word.pinyin}
-            data-english={t.word.english}
-            style={{
-              cursor: 'pointer',
-              background: isHighlighted ? 'rgba(34, 197, 94, 0.6)' : 'rgba(255, 255, 0, 0.06)',
-              borderBottom: '1px solid rgba(255, 255, 255, 0.15)',
-              marginRight: '2px',
-              transition: 'background 0.2s ease',
-            }}
-            className="word-token"
-            aria-label={`${t.word.simplified}, pinyin ${convertPinyinStyle(t.word.pinyin, pinyinStyle)}, ${t.word.english}`}
-            tabIndex={0}
-            title={`${convertPinyinStyle(t.word.pinyin, pinyinStyle)} — ${t.word.english}`}
-            onClick={(e) => {
-              e.stopPropagation();
-              speak(t.word!.simplified);
-            }}
-            onDoubleClick={onStartReadingFromToken ? (e) => {
-              e.stopPropagation();
-              onStartReadingFromToken(idx);
-            } : undefined}
-          >
-            {convertChineseText(t.text, textVariant)}
-
-            {t.word && (
-              <div className="token-popup" role="tooltip">
-                <div className="popup-text">
-                  <div className="popup-pinyin">{convertPinyinStyle(t.word.pinyin, pinyinStyle)}</div>
-                  <div className="popup-english">{t.word.english}</div>
-                </div>
-                <div className="popup-actions">
-                  <button
-                    type="button"
-                    className="speak-btn"
-                    onClick={() => {
-                      speak(t.word!.simplified);
-                    }}
-                    title="Listen to pronunciation"
-                  >
-                    🔊
-                  </button>
-
-                  {onToggle && (
-                    <button
-                      type="button"
-                      className="save-btn"
-                      onClick={async () => {
-                        // e.stopPropagation(); // Removed to avoid interfering with popup visibility
-                        await onToggle(t.word!.id);
-                      }}
-                      disabled={markingSet?.has(t.word.id)}
-                      title={learnedSet?.has(t.word.id) ? 'Unlearn word' : 'Save word'}
-                      aria-pressed={learnedSet?.has(t.word.id)}
-                    >
-                      {learnedSet?.has(t.word.id) ? '★' : '☆'}
-                    </button>
-                  )}
-
-                  {savedSet?.has(t.word.id) && (
-                    <span className="saved-confirm">Saved!</span>
-                  )}
-                </div>
-              </div>
-            )}
-          </span>
-        ) : (
-          <span key={key}>{convertChineseText(t.text, textVariant)}</span>
-        );
+        return renderToken(key, t.text, t.word, idx, idx === highlightedTokenIndex);
       })}
     </div>
   );
 }
 
+// ── Vocabulary pill list ──────────────────────────────────────────────────────
+function VocabList({
+  words, learnedSet, markingSet, pinyinStyle, onToggle, onSpeak,
+}: {
+  words: Word[];
+  learnedSet: Set<number>;
+  markingSet: Set<number>;
+  pinyinStyle: 'marks' | 'numbers';
+  onToggle: (id: number) => void;
+  onSpeak: (text: string) => void;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const PREVIEW = 12;
+  const shown = expanded ? words : words.slice(0, PREVIEW);
+
+  return (
+    <div style={{ marginTop: 28, borderTop: '1px solid var(--border-light)', paddingTop: 20 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+        <h4 style={{ margin: 0, fontSize: 13, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--muted-color)' }}>
+          Vocabulary · {words.length} words
+        </h4>
+        {words.length > PREVIEW && (
+          <button
+            onClick={() => setExpanded(e => !e)}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, color: 'var(--link-color)', padding: 0 }}
+          >
+            {expanded ? 'Show less ↑' : `Show all ${words.length} ↓`}
+          </button>
+        )}
+      </div>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+        {shown.map(word => {
+          const isLearned = learnedSet.has(word.id);
+          const isMarking = markingSet.has(word.id);
+          const c = HSK_COLORS[word.hskLevel] ?? HSK_COLORS[1];
+          return (
+            <div
+              key={word.id}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+                padding: '6px 10px',
+                borderRadius: 8,
+                border: `1px solid ${isLearned ? 'rgba(59,130,246,0.35)' : 'var(--border-color)'}`,
+                background: isLearned ? 'rgba(59,130,246,0.07)' : 'var(--card-bg)',
+                cursor: 'default',
+                transition: 'border-color 0.15s, background 0.15s',
+                fontSize: 13,
+              }}
+            >
+              {/* Chinese + pinyin */}
+              <button
+                onClick={() => onSpeak(word.simplified)}
+                title="Listen to pronunciation"
+                style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', lineHeight: 1.2 }}
+              >
+                <span style={{ fontSize: 18, fontWeight: 700, color: c.text }}>{word.simplified}</span>
+                <span style={{ fontSize: 10, color: 'var(--muted-color)', marginTop: 1 }}>{convertPinyinStyle(word.pinyin, pinyinStyle)}</span>
+              </button>
+              {/* English */}
+              <span style={{ color: 'var(--muted-color)', fontSize: 12, maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {word.english}
+              </span>
+              {/* Save button */}
+              <button
+                onClick={() => onToggle(word.id)}
+                disabled={isMarking}
+                title={isLearned ? 'Unlearn' : 'Save'}
+                style={{
+                  background: 'none', border: 'none', cursor: isMarking ? 'default' : 'pointer',
+                  padding: '1px 2px', fontSize: 14, opacity: isMarking ? 0.5 : 1,
+                  color: isLearned ? 'rgb(59,130,246)' : 'var(--muted-color)',
+                  transition: 'color 0.15s',
+                }}
+              >
+                {isMarking ? '⏳' : isLearned ? '★' : '☆'}
+              </button>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ── Reader settings bar ───────────────────────────────────────────────────────
+function SettingsBar({
+  showPinyin, onTogglePinyin,
+  fontSize, onFontSize,
+  textVariant, onTextVariant,
+  speechRate, onSpeechRate,
+  selectedVoice, availableVoices, onVoice,
+}: {
+  showPinyin: boolean; onTogglePinyin: () => void;
+  fontSize: 'small' | 'medium' | 'large' | 'xlarge'; onFontSize: (s: 'small' | 'medium' | 'large' | 'xlarge') => void;
+  textVariant: 'simplified' | 'traditional'; onTextVariant: () => void;
+  speechRate: number; onSpeechRate: (r: number) => void;
+  selectedVoice: string; availableVoices: string[]; onVoice: (v: string) => void;
+}) {
+  const chip = (active: boolean): React.CSSProperties => ({
+    padding: '4px 10px',
+    borderRadius: 6,
+    border: `1px solid ${active ? 'rgba(100,108,255,0.5)' : 'var(--border-color)'}`,
+    background: active ? 'rgba(100,108,255,0.15)' : 'transparent',
+    color: active ? 'var(--link-color)' : 'var(--muted-color)',
+    fontSize: 12,
+    fontWeight: active ? 600 : 400,
+    cursor: 'pointer',
+    whiteSpace: 'nowrap' as const,
+    transition: 'all 0.15s',
+  });
+
+  return (
+    <div style={{
+      display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center',
+      padding: '10px 16px',
+      borderRadius: 10,
+      border: '1px solid var(--border-color)',
+      background: 'var(--card-bg)',
+      marginBottom: 24,
+      fontSize: 12,
+    }}>
+      {/* Pinyin */}
+      <button onClick={onTogglePinyin} style={chip(showPinyin)} aria-pressed={showPinyin}>
+        拼音 Pinyin
+      </button>
+
+      {/* Script */}
+      <button onClick={onTextVariant} style={chip(false)} title="Toggle script">
+        {textVariant === 'simplified' ? '繁 Traditional' : '简 Simplified'}
+      </button>
+
+      <div style={{ width: 1, height: 20, background: 'var(--border-color)' }} />
+
+      {/* Font size */}
+      <div style={{ display: 'flex', gap: 3, alignItems: 'center' }}>
+        <span style={{ color: 'var(--muted-color)', marginRight: 4 }}>A</span>
+        {(['small', 'medium', 'large', 'xlarge'] as const).map((s, i) => (
+          <button key={s} onClick={() => onFontSize(s)} style={{ ...chip(fontSize === s), padding: '4px 8px', fontSize: `${0.75 + i * 0.12}em` }} title={s}>A</button>
+        ))}
+      </div>
+
+      <div style={{ width: 1, height: 20, background: 'var(--border-color)' }} />
+
+      {/* Speed */}
+      <div style={{ display: 'flex', gap: 3, alignItems: 'center' }}>
+        <span style={{ color: 'var(--muted-color)', marginRight: 2 }}>Speed</span>
+        {([0.5, 0.8, 1.0, 1.2, 1.5] as const).map((r) => (
+          <button key={r} onClick={() => onSpeechRate(r)} style={chip(speechRate === r)}>{r}×</button>
+        ))}
+      </div>
+
+      {/* Voice */}
+      <select
+        value={selectedVoice}
+        onChange={(e) => onVoice(e.target.value)}
+        style={{
+          padding: '4px 8px', borderRadius: 6,
+          border: '1px solid var(--border-color)',
+          background: 'transparent', color: 'var(--muted-color)',
+          fontSize: 12, cursor: 'pointer', maxWidth: 130,
+        }}
+      >
+        {availableVoices.map((v, i) => (
+          <option key={`${v}-${i}`} value={v}>{v.replace('zh-CN-', '').replace('Neural', '')}</option>
+        ))}
+      </select>
+    </div>
+  );
+}
+
+// ── Audio player strip ────────────────────────────────────────────────────────
+function AudioStrip({
+  articleId, readingArticleId, currentAudioSrc, voicesLoaded, speechRate, selectedVoice,
+  onPlay, onStop,
+}: {
+  articleId: number;
+  readingArticleId: number | null;
+  currentAudioSrc: string | null;
+  voicesLoaded: boolean;
+  speechRate: number;
+  selectedVoice: string;
+  onPlay: () => void;
+  onStop: () => void;
+}) {
+  const isThis = readingArticleId === articleId;
+  const isPlaying = isThis && !!currentAudioSrc;
+  const isLoading = isThis && !currentAudioSrc;
+
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
+      padding: '10px 14px', borderRadius: 10,
+      border: `1px solid ${isThis ? 'rgba(34,197,94,0.25)' : 'var(--border-color)'}`,
+      background: isThis ? 'rgba(34,197,94,0.04)' : 'var(--card-bg)',
+      marginBottom: 20,
+      transition: 'all 0.25s',
+    }}>
+      <button
+        onClick={onPlay}
+        disabled={!voicesLoaded}
+        style={{
+          display: 'inline-flex', alignItems: 'center', gap: 6,
+          padding: '7px 14px', borderRadius: 8,
+          border: `1px solid ${isPlaying ? 'rgba(34,197,94,0.5)' : 'rgba(59,130,246,0.4)'}`,
+          background: isPlaying ? 'rgba(34,197,94,0.1)' : 'rgba(59,130,246,0.1)',
+          color: isPlaying ? 'rgb(34,197,94)' : 'rgb(59,130,246)',
+          fontSize: 13, fontWeight: 600, cursor: voicesLoaded ? 'pointer' : 'not-allowed',
+        }}
+      >
+        {isLoading ? '⏳ Generating…' : isPlaying ? '🎧 Playing' : '▶ Listen'}
+      </button>
+
+      {isThis && (
+        <button
+          onClick={onStop}
+          style={{
+            display: 'inline-flex', alignItems: 'center', gap: 5,
+            padding: '7px 12px', borderRadius: 8,
+            border: '1px solid rgba(220,38,38,0.35)',
+            background: 'rgba(220,38,38,0.08)',
+            color: 'rgb(220,38,38)',
+            fontSize: 13, cursor: 'pointer',
+          }}
+        >
+          ■ Stop
+        </button>
+      )}
+
+      <span style={{ fontSize: 12, color: 'var(--muted-color)' }}>
+        {speechRate}× · {selectedVoice.replace('zh-CN-', '').replace('Neural', '')}
+      </span>
+
+      {isPlaying && currentAudioSrc && (
+        <div style={{ width: '100%', marginTop: 4 }}>
+          {/* Will be populated by useRef from parent */}
+          <AudioElement src={currentAudioSrc} articleId={articleId} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Thin wrapper so we can attach the audio element directly
+function AudioElement({ src, articleId }: { src: string; articleId: number }) {
+  return (
+    <audio
+      key={`audio-${articleId}`}
+      controls
+      autoPlay
+      src={src}
+      style={{ width: '100%', height: 36, accentColor: 'rgb(34,197,94)' }}
+    />
+  );
+}
+
+// ── Main Articles page ────────────────────────────────────────────────────────
 export default function Articles(): React.ReactElement {
-  const [loading, setLoading] = useState<boolean>(true);
+  const [loading, setLoading] = useState(true);
   const [data, setData] = useState<Article[] | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [showPinyin, setShowPinyin] = useState<boolean>(false);
+  const [openArticleId, setOpenArticleId] = useState<number | null>(null);
+
+  // Reader settings
+  const [showPinyin, setShowPinyin] = useState(false);
   const [localFontSize, setLocalFontSize] = useState<'small' | 'medium' | 'large' | 'xlarge'>('medium');
   const [localTextVariant, setLocalTextVariant] = useState<'simplified' | 'traditional'>('simplified');
-  const [speechRate, setSpeechRate] = useState<number>(0.8);
-  const [selectedVoice, setSelectedVoice] = useState<string>('zh-CN-XiaoxiaoNeural');
-  const [availableVoices] = useState<string[]>(['zh-CN-XiaoxiaoNeural', 'zh-CN-XiaoyiNeural', 'zh-CN-YunjianNeural', 'zh-CN-YunxiNeural', 'zh-CN-YunxiaNeural', 'zh-CN-YunyangNeural']);
-  const [voicesLoaded, setVoicesLoaded] = useState<boolean>(true);
+  const [speechRate, setSpeechRate] = useState(0.8);
+  const [selectedVoice, setSelectedVoice] = useState('zh-CN-XiaoxiaoNeural');
+  const availableVoices = ['zh-CN-XiaoxiaoNeural', 'zh-CN-XiaoyiNeural', 'zh-CN-YunjianNeural', 'zh-CN-YunxiNeural', 'zh-CN-YunxiaNeural', 'zh-CN-YunyangNeural'];
+
+  // Audio state
   const [currentAudioSrc, setCurrentAudioSrc] = useState<string | null>(null);
-  const [, setAudioSegments] = useState<Array<{ text: string; start: number; end: number; index: number }>>([]);
   const [tokens, setTokens] = useState<Array<{ text: string; word?: Word; index: number }>>([]);
   const [wordTimings, setWordTimings] = useState<Array<{ word: string; start: number; duration: number; audioOffset: number }>>([]);
   const [readingArticleId, setReadingArticleId] = useState<number | null>(null);
-  const [highlightedTokenIndex, setHighlightedTokenIndex] = useState<number>(-1);
-  const [, setIsPaused] = useState<boolean>(false);
-  const [, setCurrentAudioTime] = useState<number>(0); // Track current audio time
-  const [, setAudioDuration] = useState<number>(0); // Track audio duration
+  const [highlightedTokenIndex, setHighlightedTokenIndex] = useState(-1);
 
-  // Learned word IDs (synchronized with backend) and marking state for in-flight requests
+  // Word learning state
   const [learnedIds, setLearnedIds] = useState<number[]>([]);
   const [markingIds, setMarkingIds] = useState<number[]>([]);
   const [savedIds, setSavedIds] = useState<number[]>([]);
   const learnedSet = useMemo(() => new Set(learnedIds), [learnedIds]);
   const markingSet = useMemo(() => new Set(markingIds), [markingIds]);
   const savedSet = useMemo(() => new Set(savedIds), [savedIds]);
-  const { user, accessToken, loginWithPatreon } = useAuth();
-  // Get user's pinyin style preference, default to 'marks'
-  const pinyinStyle = user?.pinyinStyle || 'marks';
 
-  // Function to sync settings to backend
+  const { user, accessToken, loginWithPatreon } = useAuth();
+  const pinyinStyle = (user?.pinyinStyle || 'marks') as 'marks' | 'numbers';
+
+  // ── Settings sync ───────────────────────────────────────────────────────────
   const syncSettingsToBackend = useCallback(async (settings: {
     fontSize?: 'small' | 'medium' | 'large' | 'xlarge';
     speechRate?: number;
@@ -405,647 +549,310 @@ export default function Articles(): React.ReactElement {
     textVariant?: 'simplified' | 'traditional';
   }) => {
     if (!user || !accessToken) return;
-
     try {
-      const response = await fetch(`${API_URL}/api/auth/settings`, {
+      await fetch(`${API_URL}/api/auth/settings`, {
         method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${accessToken}`,
-        },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
         credentials: 'include',
         body: JSON.stringify(settings),
       });
-
-      if (!response.ok) {
-        console.error('Failed to sync settings:', response.statusText);
-        return;
-      }
-
-      // Don't refresh user data immediately - let the server update naturally
-      // await refreshUser(); // REMOVED to prevent infinite loops
-    } catch (error) {
-      console.error('Error syncing settings:', error);
-    }
+    } catch (err) { console.error('Error syncing settings:', err); }
   }, [user, accessToken]);
 
-  // Initialize local settings from user preferences
-  useEffect(() => {
-    if (user?.fontSize) {
-      setLocalFontSize(user.fontSize as 'small' | 'medium' | 'large' | 'xlarge');
-    }
-    if (user?.speechRate) {
-      setSpeechRate(user.speechRate);
-    }
-    if (user?.voiceName) {
-      setSelectedVoice(user.voiceName);
-    }
-    if (user?.textVariant) {
-      setLocalTextVariant(user.textVariant);
-    }
-  }, [user?.fontSize, user?.speechRate, user?.voiceName, user?.textVariant]);
+  useEffect(() => { if (user?.fontSize) setLocalFontSize(user.fontSize as any); }, [user?.fontSize]);
+  useEffect(() => { if (user?.speechRate) setSpeechRate(user.speechRate); }, [user?.speechRate]);
+  useEffect(() => { if (user?.voiceName) setSelectedVoice(user.voiceName); }, [user?.voiceName]);
+  useEffect(() => { if (user?.textVariant) setLocalTextVariant(user.textVariant as any); }, [user?.textVariant]);
 
-  // Sync font size changes to backend
-  useEffect(() => {
-    if (user?.fontSize && localFontSize !== user.fontSize) {
-      syncSettingsToBackend({ fontSize: localFontSize });
-    }
-  }, [localFontSize, user?.fontSize, syncSettingsToBackend]);
+  useEffect(() => { if (user?.fontSize && localFontSize !== user.fontSize) syncSettingsToBackend({ fontSize: localFontSize }); }, [localFontSize]);
+  useEffect(() => { if (user?.speechRate !== undefined && speechRate !== user.speechRate) syncSettingsToBackend({ speechRate }); }, [speechRate]);
+  useEffect(() => { if (selectedVoice !== (user?.voiceName || '')) syncSettingsToBackend({ voiceName: selectedVoice }); }, [selectedVoice]);
+  useEffect(() => { if (user?.textVariant && localTextVariant !== user.textVariant) syncSettingsToBackend({ textVariant: localTextVariant }); }, [localTextVariant]);
 
-  // Sync speech rate changes to backend
+  // ── Fetch learned words ─────────────────────────────────────────────────────
   useEffect(() => {
-    if (user?.speechRate !== undefined && speechRate !== user.speechRate) {
-      syncSettingsToBackend({ speechRate });
-    }
-  }, [speechRate, user?.speechRate, syncSettingsToBackend]);
-
-  // Sync voice selection changes to backend
-  useEffect(() => {
-    if (selectedVoice !== (user?.voiceName || '')) {
-      syncSettingsToBackend({ voiceName: selectedVoice || '' });
-    }
-  }, [selectedVoice, user?.voiceName, syncSettingsToBackend]);
-
-  // Sync text variant changes to backend
-  useEffect(() => {
-    if (user?.textVariant && localTextVariant !== user.textVariant) {
-      syncSettingsToBackend({ textVariant: localTextVariant });
-    }
-  }, [localTextVariant, user?.textVariant, syncSettingsToBackend]);
-
-  // Azure TTS voices are pre-defined, no need to load dynamically
-  useEffect(() => {
-    // Azure voices are already set in state, mark as loaded
-    setVoicesLoaded(true);
-  }, []);
-
-  // Cleanup effect to handle navigation - stop audio when component unmounts
-  useEffect(() => {
-    return () => {
-      // Reset reading state
-      setReadingArticleId(null);
-      setHighlightedTokenIndex(-1);
-      setCurrentAudioSrc(null);
-    };
-  }, []);
-
-  // Fetch initial learned IDs from backend
-  useEffect(() => {
-    const fetchLearned = async () => {
-      if (!user || !accessToken) return; // Only fetch if authenticated
-
+    if (!user || !accessToken) return;
+    (async () => {
       try {
         const res = await fetch(`${API_URL}/api/flashcards`, {
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-          },
-          credentials: 'include',
+          headers: { Authorization: `Bearer ${accessToken}` }, credentials: 'include',
         });
         if (!res.ok) return;
         const json = await res.json();
-        const ids = Array.isArray(json) ? (json as Array<{ wordId?: number }>).map((r) => r.wordId).filter((n): n is number => typeof n === 'number') : [];
-        setLearnedIds(ids);
-      } catch (err) {
-        console.error('Failed to load learned words', err);
-      }
-    };
-
-    void fetchLearned();
+        setLearnedIds(Array.isArray(json) ? json.map((r: any) => r.wordId).filter(Number.isInteger) : []);
+      } catch (err) { console.error('Failed to load learned words', err); }
+    })();
   }, [user, accessToken]);
 
+  // ── Word toggle ─────────────────────────────────────────────────────────────
   const markLearned = async (wordId: number): Promise<boolean> => {
-    if (!user || !accessToken) {
-      loginWithPatreon();
-      return false;
-    }
-
+    if (!user || !accessToken) { loginWithPatreon(); return false; }
     if (learnedSet.has(wordId) || markingSet.has(wordId)) return false;
-    setMarkingIds((s) => [...s, wordId]);
-
+    setMarkingIds(s => [...s, wordId]);
     try {
       const res = await fetch(`${API_URL}/api/flashcards`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${accessToken}`,
-        },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
         credentials: 'include',
         body: JSON.stringify({ wordId }),
       });
-
-      if (!res.ok) {
-        const text = await res.text();
-        throw new Error(text || `HTTP ${res.status}`);
-      }
-
-      setLearnedIds((s) => (s.includes(wordId) ? s : [...s, wordId]));
+      if (!res.ok) throw new Error(await res.text() || `HTTP ${res.status}`);
+      setLearnedIds(s => s.includes(wordId) ? s : [...s, wordId]);
       return true;
-    } catch (err: unknown) {
-      console.error('Failed to mark learned', err);
-      alert('Failed to mark word as learned');
-      return false;
-    } finally {
-      setMarkingIds((s) => s.filter((id) => id !== wordId));
-    }
+    } catch (err) { console.error('Failed to mark learned', err); alert('Failed to mark word as learned'); return false; }
+    finally { setMarkingIds(s => s.filter(id => id !== wordId)); }
   };
 
   const unlearn = async (wordId: number): Promise<boolean> => {
-    if (!user || !accessToken) {
-      loginWithPatreon();
-      return false;
-    }
-
+    if (!user || !accessToken) { loginWithPatreon(); return false; }
     if (!learnedSet.has(wordId) || markingSet.has(wordId)) return false;
-    setMarkingIds((s) => [...s, wordId]);
-
+    setMarkingIds(s => [...s, wordId]);
     try {
       const res = await fetch(`${API_URL}/api/flashcards/${wordId}`, {
         method: 'DELETE',
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-        },
+        headers: { Authorization: `Bearer ${accessToken}` },
         credentials: 'include',
       });
-
-      if (!res.ok) {
-        const text = await res.text();
-        throw new Error(text || `HTTP ${res.status}`);
-      }
-
-      setLearnedIds((s) => s.filter((id) => id !== wordId));
-      setSavedIds((s) => s.filter((id) => id !== wordId));
+      if (!res.ok) throw new Error(await res.text() || `HTTP ${res.status}`);
+      setLearnedIds(s => s.filter(id => id !== wordId));
+      setSavedIds(s => s.filter(id => id !== wordId));
       return true;
-    } catch (err: unknown) {
-      console.error('Failed to unlearn', err);
-      alert('Failed to unlearn word');
-      return false;
-    } finally {
-      setMarkingIds((s) => s.filter((id) => id !== wordId));
-    }
-  };
-  const saveWord = async (wordId: number) => {
-    // Call markLearned so the same endpoint is used (and learned state is updated)
-    const ok = await markLearned(wordId);
-    if (!ok) return false;
-
-    // Show a quick saved confirmation
-    setSavedIds((s) => (s.includes(wordId) ? s : [...s, wordId]));
-    setTimeout(() => setSavedIds((s) => s.filter((id) => id !== wordId)), 1400);
-    return true;
+    } catch (err) { console.error('Failed to unlearn', err); alert('Failed to unlearn word'); return false; }
+    finally { setMarkingIds(s => s.filter(id => id !== wordId)); }
   };
 
   const toggleLearn = async (wordId: number) => {
-    if (learnedSet.has(wordId)) {
-      return await unlearn(wordId);
-    }
-    return await saveWord(wordId);
+    if (learnedSet.has(wordId)) return await unlearn(wordId);
+    const ok = await markLearned(wordId);
+    if (!ok) return false;
+    setSavedIds(s => s.includes(wordId) ? s : [...s, wordId]);
+    setTimeout(() => setSavedIds(s => s.filter(id => id !== wordId)), 1400);
+    return true;
   };
 
+  // ── TTS ─────────────────────────────────────────────────────────────────────
   const speak = async (text: string) => {
     try {
-      const response = await fetch(`${API_URL}/api/tts`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          text: text,
-          voice: selectedVoice,
-          rate: speechRate.toString()
-        })
-      });
-      
-      if (!response.ok) {
-        throw new Error(`TTS request failed: ${response.statusText}`);
-      }
-      
-      const data = await response.json();
-      
-      // Create new audio element and play
-      const audio = new Audio(`data:audio/wav;base64,${data.audioData}`);
-      audio.play();
-    } catch (error) {
-      console.error('TTS Error:', error);
-      alert('Failed to generate speech');
-    }
-  };
-
-  const readParagraph = async (articleId: number, content: string, words: Word[], _startPosition?: number) => {
-    // 1. If clicking the currently playing article, let the native player handle it
-    if (readingArticleId === articleId && currentAudioSrc) {
-      // Audio is already loaded, user can control it with native controls
-      return;
-    }
-
-    // 2. Stop any existing audio (reset)
-    setCurrentAudioSrc(null);
-    
-    // Reset State
-    setReadingArticleId(articleId);
-    setHighlightedTokenIndex(-1);
-    setIsPaused(false);
-    setCurrentAudioTime(0);
-    setAudioDuration(0);
-    setWordTimings([]);  // Clear previous word timings
-
-    // 3. Start new reading
-    await startAzureReading(articleId, content, words);
-  };
-
-  const startAzureReading = async (_articleId: number, content: string, _words: Word[]) => {
-    try {
-      const convertedContent = convertChineseText(content, localTextVariant);
-      
-      const response = await fetch(`${API_URL}/api/tts`, {
+      const res = await fetch(`${API_URL}/api/tts`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          text: convertedContent,
-          voice: selectedVoice,
-          rate: speechRate.toString(),
-          words: _words
-        })
+        body: JSON.stringify({ text, voice: selectedVoice, rate: speechRate.toString() }),
       });
-      
-      if (!response.ok) throw new Error(`TTS request failed`);
-      
-      const data = await response.json();
-      
-      // Set audio segments and tokenization from backend
-      setAudioSegments(data.segments || []);
+      if (!res.ok) throw new Error('TTS failed');
+      const data = await res.json();
+      new Audio(`data:audio/wav;base64,${data.audioData}`).play();
+    } catch (err) { console.error('TTS Error:', err); alert('Failed to generate speech'); }
+  };
+
+  const readArticle = async (articleId: number, content: string, words: Word[]) => {
+    if (readingArticleId === articleId && currentAudioSrc) return;
+    setCurrentAudioSrc(null);
+    setReadingArticleId(articleId);
+    setHighlightedTokenIndex(-1);
+    setWordTimings([]);
+    try {
+      const convertedContent = convertChineseText(content, localTextVariant);
+      const res = await fetch(`${API_URL}/api/tts`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: convertedContent, voice: selectedVoice, rate: speechRate.toString(), words }),
+      });
+      if (!res.ok) throw new Error('TTS failed');
+      const data = await res.json();
       setTokens(data.tokens || []);
       setWordTimings(data.timings || []);
-      
-      
-      // Set duration from TTS response
-      if (data.totalDuration && data.totalDuration > 0) {
-        setAudioDuration(data.totalDuration / 1000);
-      }
-
-      // Set the audio source for the native player
-      const audioSrc = `data:audio/wav;base64,${data.audioData}`;
-      setCurrentAudioSrc(audioSrc);
-
-    } catch (error) {
-      console.error('Azure TTS Error:', error);
+      setCurrentAudioSrc(`data:audio/wav;base64,${data.audioData}`);
+    } catch (err) {
+      console.error('Azure TTS Error:', err);
       setReadingArticleId(null);
-      setIsPaused(false);
     }
   };
 
-  const startReadingFromToken = async (articleId: number, content: string, words: Word[], _tokenIndex: number) => {
-      readParagraph(articleId, content, words, 0); 
+  const stopAudio = () => {
+    setCurrentAudioSrc(null);
+    setReadingArticleId(null);
+    setHighlightedTokenIndex(-1);
+    setWordTimings([]);
   };
 
+  // ── Fetch articles ──────────────────────────────────────────────────────────
   const fetchArticles = async () => {
     setLoading(true);
     try {
       const res = await fetch(`${API_URL}/api/articles`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const json = await res.json();
-      setData(json);
+      setData(await res.json());
+      setError(null);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : String(e));
-      setData(null); 
-    } finally {
-      setLoading(false);
-    }
+      setData(null);
+    } finally { setLoading(false); }
   };
 
-  useEffect(() => {
-    void fetchArticles();
-  }, []);
+  useEffect(() => { void fetchArticles(); }, []);
 
-  const btnStyle = (active: boolean): React.CSSProperties => ({
-    padding: '5px 9px',
-    background: active ? 'rgba(100, 108, 255, 0.2)' : 'transparent',
-    border: '1px solid var(--border-color)',
-    borderRadius: 4,
-    fontSize: '0.85em',
-    cursor: 'pointer',
-    color: 'inherit',
-    whiteSpace: 'nowrap' as const,
-  });
-
+  // ── Render ──────────────────────────────────────────────────────────────────
   return (
-    <div style={{ maxWidth: 960, padding: '0 4px' }}>
-      <h2>Articles & Vocabulary</h2>
+    <>
+      <style>{`
+        .article-card { transition: box-shadow 0.2s ease, border-color 0.2s ease; }
+        .article-card:hover { box-shadow: 0 4px 20px rgba(0,0,0,0.12); }
+        .article-open { border-color: rgba(100,108,255,0.25) !important; }
+        .article-list-btn {
+          display: inline-flex; align-items: center; gap: 6px;
+          padding: 7px 14px; border-radius: 8px; font-size: 13px;
+          font-weight: 600; cursor: pointer; transition: all 0.15s; border: none;
+        }
+        .article-list-btn-primary {
+          background: rgba(100,108,255,0.12);
+          color: var(--link-color);
+          border: 1px solid rgba(100,108,255,0.25) !important;
+        }
+        .article-list-btn-primary:hover { background: rgba(100,108,255,0.2); }
+        .article-list-btn-ghost { background: transparent; color: var(--muted-color); border: 1px solid var(--border-color) !important; }
+        .article-list-btn-ghost:hover { color: var(--text-color); border-color: var(--text-color) !important; }
+        @media (max-width: 600px) {
+          .reader-content { font-size: clamp(18px, 5vw, 22px) !important; }
+        }
+      `}</style>
 
-      {/* Toolbar */}
-      <div style={{ marginBottom: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
-        {/* Row 1: misc actions */}
-        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
-          <button onClick={fetchArticles} disabled={loading} style={btnStyle(false)}>
-            {loading ? 'Refreshing…' : 'Refresh'}
-          </button>
-          <button onClick={() => setShowPinyin((s) => !s)} aria-pressed={showPinyin} style={btnStyle(showPinyin)}>
-            Pinyin {showPinyin ? 'ON' : 'OFF'}
-          </button>
-          <button
-            onClick={async () => {
-              const newVariant = localTextVariant === 'simplified' ? 'traditional' : 'simplified';
-              setLocalTextVariant(newVariant);
-              await syncSettingsToBackend({ textVariant: newVariant });
-            }}
-            style={btnStyle(false)}
-            title={`Switch to ${localTextVariant === 'simplified' ? 'Traditional' : 'Simplified'} Chinese`}
-          >
-            {localTextVariant === 'simplified' ? '繁 Traditional' : '简 Simplified'}
-          </button>
-        </div>
-
-        {/* Row 2: font size + speech rate + voice */}
-        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
-          {/* Font size */}
-          <div style={{ display: 'flex', gap: 3, alignItems: 'center' }}>
-            <span style={{ fontSize: '0.8em', color: 'var(--muted-color)', marginRight: 2 }}>Font</span>
-            {(['small', 'medium', 'large', 'xlarge'] as const).map((s, i) => (
-              <button key={s} onClick={() => setLocalFontSize(s)} style={{ ...btnStyle(localFontSize === s), fontSize: `${0.8 + i * 0.15}em`, padding: '3px 7px' }} title={`${s} font`}>A</button>
-            ))}
+      <div style={{ maxWidth: 800, margin: '0 auto' }}>
+        {/* Page header */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24, flexWrap: 'wrap', gap: 10 }}>
+          <div>
+            <h2 style={{ margin: 0, fontSize: 'clamp(20px,4vw,26px)', fontWeight: 700, letterSpacing: '-0.02em' }}>Articles</h2>
+            <p style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--muted-color)' }}>
+              Click any word to hear it · hover for definition · ★ to save
+            </p>
           </div>
+          <button onClick={fetchArticles} disabled={loading} className="article-list-btn article-list-btn-ghost" style={{ border: '1px solid var(--border-color)' }}>
+            {loading ? '⟳ Loading…' : '⟳ Refresh'}
+          </button>
+        </div>
 
-          {/* Speech rate */}
-          <div style={{ display: 'flex', gap: 3, alignItems: 'center' }}>
-            <span style={{ fontSize: '0.8em', color: 'var(--muted-color)', marginRight: 2 }}>Speed</span>
-            {([0.5, 0.8, 1.0, 1.2, 1.5, 2.0] as const).map((r) => (
-              <button key={r} onClick={() => setSpeechRate(r)} style={btnStyle(speechRate === r)} title={`${r}x speed`}>{r}x</button>
-            ))}
+        {/* Settings bar — always visible */}
+        <SettingsBar
+          showPinyin={showPinyin} onTogglePinyin={() => setShowPinyin(s => !s)}
+          fontSize={localFontSize} onFontSize={setLocalFontSize}
+          textVariant={localTextVariant} onTextVariant={async () => {
+            const nv = localTextVariant === 'simplified' ? 'traditional' : 'simplified';
+            setLocalTextVariant(nv);
+            await syncSettingsToBackend({ textVariant: nv });
+          }}
+          speechRate={speechRate} onSpeechRate={setSpeechRate}
+          selectedVoice={selectedVoice} availableVoices={availableVoices} onVoice={setSelectedVoice}
+        />
+
+        {/* Error */}
+        {error && (
+          <div style={{ padding: '12px 16px', borderRadius: 8, background: 'rgba(220,38,38,0.08)', border: '1px solid rgba(220,38,38,0.2)', color: 'rgb(220,38,38)', marginBottom: 16, fontSize: 14 }}>
+            Failed to load articles: {error}
           </div>
+        )}
 
-          {/* Voice */}
-          <select
-            value={selectedVoice}
-            onChange={(e) => setSelectedVoice(e.target.value)}
-            style={{
-              padding: '5px 8px',
-              border: '1px solid var(--border-color)',
-              borderRadius: 4,
-              fontSize: '0.85em',
-              background: 'transparent',
-              color: 'inherit',
-              maxWidth: 150,
-            }}
-            title={`Voice: ${selectedVoice || 'Default'}`}
-          >
-            <option value="">Default Voice</option>
-            {availableVoices.map((voice, index) => (
-              <option key={`${voice}-${index}`} value={voice}>{voice.replace('zh-CN-', '').replace('Neural', '')}</option>
-            ))}
-          </select>
-        </div>
-      </div>
+        {/* Empty state */}
+        {!loading && !error && data?.length === 0 && (
+          <div style={{ textAlign: 'center', padding: '60px 20px', color: 'var(--muted-color)' }}>
+            <div style={{ fontSize: 40, marginBottom: 12 }}>📭</div>
+            <p>No articles found.</p>
+          </div>
+        )}
 
-
-      {loading && <p>Loading…</p>}
-      {error && (
-        <div style={{ color: 'crimson', marginBottom: 12 }}>
-          <strong>Error:</strong> {error}
-        </div>
-      )}
-
-      {data && data.length === 0 && !loading && <p>No articles found in the database.</p>}
-
-      {data && data.length > 0 && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          {data.map((article) => (
-            <article key={article.id} className="card">
-              <header style={{ marginBottom: 8 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8, marginBottom: 6 }}>
-                  <h3 style={{ margin: 0, minWidth: 0, wordBreak: 'break-word' }}>
-                    {article.title}
-                  </h3>
-                  {/* Audio Status Indicator */}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 3, fontSize: '0.78em', flexShrink: 0 }}>
-                    {readingArticleId === article.id && currentAudioSrc ? (
-                      <span style={{ color: 'rgb(34, 197, 94)' }}>🎵 Playing</span>
-                    ) : readingArticleId === article.id ? (
-                      <span style={{ color: 'rgba(128,128,128,0.7)' }}>⏳ Loading</span>
-                    ) : null}
-                  </div>
-                </div>
-                <div className="muted" style={{ fontSize: '0.85em' }}>
-                  HSK {article.hskLevel}
-                  {article.createdAt && <> · {new Date(article.createdAt).toLocaleDateString()}</>}
-                </div>
-              </header>
-
-              {/* Native HTML5 Audio Player */}
-              <div style={{ 
-                marginBottom: 16, 
-                padding: '12px 16px',
-                background: readingArticleId === article.id 
-                  ? 'rgba(34, 197, 94, 0.05)' 
-                  : 'rgba(128, 128, 128, 0.02)', 
-                borderRadius: 8, 
-                border: readingArticleId === article.id 
-                  ? '1px solid rgba(34, 197, 94, 0.2)' 
-                  : '1px solid rgba(255, 255, 255, 0.05)',
-                transition: 'all 0.3s ease'
-              }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
-                  <button
-                    onClick={() => readParagraph(article.id, article.content, article.words)}
-                    disabled={!voicesLoaded}
+        {/* Article list */}
+        {data && data.length > 0 && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            {data.map(article => {
+              const isOpen = openArticleId === article.id;
+              return (
+                <article
+                  key={article.id}
+                  className={`card article-card${isOpen ? ' article-open' : ''}`}
+                  style={{ padding: 0, overflow: 'hidden' }}
+                >
+                  {/* Article header — always visible */}
+                  <div
                     style={{
-                      padding: '7px 12px',
-                      background: readingArticleId === article.id && currentAudioSrc
-                        ? 'rgba(34, 197, 94, 0.1)'
-                        : 'rgba(59, 130, 246, 0.1)',
-                      border: '1px solid rgb(34, 197, 94)',
-                      borderRadius: 6,
-                      fontSize: '0.85em',
-                      cursor: voicesLoaded ? 'pointer' : 'not-allowed',
-                      color: 'rgb(34, 197, 94)',
-                      fontWeight: 500,
-                      opacity: voicesLoaded ? 1 : 0.6,
-                      whiteSpace: 'nowrap',
+                      display: 'flex', alignItems: 'center', gap: 12, padding: '16px 20px',
+                      cursor: 'pointer', userSelect: 'none',
                     }}
-                    title={readingArticleId === article.id ? 'Audio is ready' : 'Generate and play audio'}
+                    onClick={() => setOpenArticleId(isOpen ? null : article.id)}
+                    role="button"
+                    aria-expanded={isOpen}
                   >
-                    {!voicesLoaded ? '⏳ Loading...' : readingArticleId === article.id ? '🎧 Audio Ready' : '▶️ Play'}
-                  </button>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 4 }}>
+                        <h3 style={{ margin: 0, fontSize: 'clamp(15px,3vw,17px)', fontWeight: 700, letterSpacing: '-0.01em' }}>
+                          {article.title}
+                        </h3>
+                        <HskBadge level={article.hskLevel} />
+                      </div>
+                      <div style={{ display: 'flex', gap: 10, fontSize: 12, color: 'var(--muted-color)' }}>
+                        {article.createdAt && <span>{new Date(article.createdAt).toLocaleDateString()}</span>}
+                        <span>{article.words.length} words</span>
+                      </div>
+                    </div>
+                    <span style={{ fontSize: 18, color: 'var(--muted-color)', flexShrink: 0, transition: 'transform 0.2s', transform: isOpen ? 'rotate(180deg)' : 'none' }}>
+                      ↓
+                    </span>
+                  </div>
 
-                  {readingArticleId === article.id && (
-                    <button
-                      onClick={() => {
-                        setCurrentAudioSrc(null);
-                        setReadingArticleId(null);
-                        setHighlightedTokenIndex(-1);
-                        setIsPaused(false);
-                        setCurrentAudioTime(0);
-                        setAudioDuration(0);
-                      }}
-                      style={{
-                        padding: '6px 10px',
-                        background: 'rgba(220, 38, 38, 0.1)',
-                        border: '1px solid rgb(220, 38, 38)',
-                        borderRadius: 4,
-                        fontSize: '0.8em',
-                        cursor: 'pointer',
-                        color: 'rgb(220, 38, 38)',
-                        fontWeight: 500,
-                        whiteSpace: 'nowrap',
-                      }}
-                      title="Stop and reset audio"
-                    >
-                      ⏹️ Stop
-                    </button>
+                  {/* Article body — only when open */}
+                  {isOpen && (
+                    <div style={{ borderTop: '1px solid var(--border-light)', padding: '20px 24px 24px' }}>
+
+                      {/* Audio strip */}
+                      <AudioStrip
+                        articleId={article.id}
+                        readingArticleId={readingArticleId}
+                        currentAudioSrc={currentAudioSrc}
+                        voicesLoaded={true}
+                        speechRate={speechRate}
+                        selectedVoice={selectedVoice}
+                        onPlay={() => readArticle(article.id, article.content, article.words)}
+                        onStop={stopAudio}
+                      />
+
+                      {/* Article text */}
+                      <div className="reader-content">
+                        <ArticleContent
+                          content={article.content}
+                          words={article.words}
+                          showPinyin={showPinyin}
+                          onToggle={toggleLearn}
+                          markingSet={markingSet}
+                          savedSet={savedSet}
+                          learnedSet={learnedSet}
+                          pinyinStyle={pinyinStyle}
+                          fontSize={localFontSize}
+                          highlightedTokenIndex={readingArticleId === article.id ? highlightedTokenIndex : -1}
+                          selectedVoice={selectedVoice}
+                          speechRate={speechRate}
+                          onStartReadingFromToken={(_idx) => readArticle(article.id, article.content, article.words)}
+                          textVariant={localTextVariant}
+                          backendTokens={readingArticleId === article.id ? tokens : []}
+                          wordTimings={readingArticleId === article.id ? wordTimings : []}
+                        />
+                      </div>
+
+                      {/* Vocabulary */}
+                      {article.words.length > 0 && (
+                        <VocabList
+                          words={article.words}
+                          learnedSet={learnedSet}
+                          markingSet={markingSet}
+                          pinyinStyle={pinyinStyle}
+                          onToggle={(id) => void toggleLearn(id)}
+                          onSpeak={speak}
+                        />
+                      )}
+                    </div>
                   )}
-
-                  <span style={{ fontSize: '0.78em', color: 'var(--muted-color)', whiteSpace: 'nowrap' }}>
-                    {speechRate}x · {selectedVoice.replace('zh-CN-', '').replace('Neural', '') || 'Default'}
-                  </span>
-                </div>
-                
-                {/* Native Audio Element - Only show when audio is ready */}
-                {readingArticleId === article.id && currentAudioSrc && (
-                  <div style={{ marginTop: 8 }}>
-                    <audio 
-                      controls 
-                      style={{ 
-                        width: '100%', 
-                        height: '40px',
-                        accentColor: 'rgb(34, 197, 94)'
-                      }}
-                      onTimeUpdate={(e) => {
-                        const audio = e.currentTarget;
-                        setCurrentAudioTime(audio.currentTime);
-                        
-                        // Update highlighting based on current time using word timings
-                        const nowMs = audio.currentTime * 1000;
-                        
-                        if (wordTimings.length > 0) {
-                          // Use direct word timings from backend - now using direct index mapping
-                          let highlightedWordIndex = -1;
-                          
-                          for (let i = 0; i < wordTimings.length; i++) {
-                            const timing = wordTimings[i];
-                            const wordStart = timing.start;
-                            const wordEnd = timing.start + timing.duration;
-                            
-                            if (nowMs >= wordStart && nowMs <= wordEnd) {
-                              highlightedWordIndex = i;
-                              console.log(`Highlighting word ${highlightedWordIndex} for time ${nowMs.toFixed(0)}ms: "${timing.word}"`);
-                              break;
-                            }
-                          }
-                          
-                          // Debug when no timing is found
-                          if (highlightedWordIndex === -1) {
-                            // Don't log on every frame, just when we lose highlighting
-                            if (highlightedTokenIndex >= 0) {
-                              console.log(`No word timing found for time ${nowMs.toFixed(0)}ms`);
-                            }
-                          }
-                          
-                          // Always update, even if -1 to clear highlighting between words
-                          setHighlightedTokenIndex(highlightedWordIndex);
-                        } else if (tokens.length > 0) {
-                          // Fallback highlighting based on duration and backend tokens
-                          if (audio.duration > 0) {
-                            const percent = audio.currentTime / audio.duration;
-                            const estimatedTokenIndex = Math.floor(percent * tokens.length);
-                            const clampedIndex = Math.max(0, Math.min(estimatedTokenIndex, tokens.length - 1));
-                            setHighlightedTokenIndex(clampedIndex);
-                          }
-                        }
-                      }}
-                      onLoadedMetadata={(e) => {
-                        const audio = e.currentTarget;
-                        if (audio.duration && audio.duration !== Infinity) {
-                          setAudioDuration(audio.duration);
-                        }
-                      }}
-                      onPlay={() => setIsPaused(false)}
-                      onPause={() => setIsPaused(true)}
-                      onEnded={() => {
-                        setIsPaused(false);
-                        setReadingArticleId(null);
-                        setHighlightedTokenIndex(-1);
-                        setCurrentAudioTime(0);
-                      }}
-                      src={currentAudioSrc}
-                      autoPlay
-                    />
-                  </div>
-                )}
-              </div>
-
-              <ArticleContent
-                content={article.content}
-                words={article.words}
-                showPinyin={showPinyin}
-                onToggle={toggleLearn}
-                markingSet={markingSet}
-                savedSet={savedSet}
-                learnedSet={learnedSet}
-                pinyinStyle={pinyinStyle}
-                fontSize={localFontSize}
-                highlightedTokenIndex={readingArticleId === article.id ? highlightedTokenIndex : -1}
-                selectedVoice={selectedVoice}
-                speechRate={speechRate}
-                onStartReadingFromToken={(tokenIndex) => startReadingFromToken(article.id, article.content, article.words, tokenIndex)}
-                textVariant={localTextVariant}
-                backendTokens={readingArticleId === article.id ? tokens : []}
-                wordTimings={readingArticleId === article.id ? wordTimings : []}
-              />
-
-              {article.words && article.words.length > 0 && (
-                <section style={{ marginTop: 12 }}>
-                  <h4 style={{ margin: '8px 0' }}>Vocabulary</h4>
-                  <div style={{ overflowX: 'auto' }}>
-                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
-                      <thead>
-                        <tr>
-                          <th style={{ textAlign: 'left', borderBottom: '1px solid var(--border-color)', padding: 4 }}>Han Zi</th>
-                          <th style={{ textAlign: 'left', borderBottom: '1px solid var(--border-color)', padding: 4 }}>Pinyin</th>
-                          <th style={{ textAlign: 'left', borderBottom: '1px solid var(--border-color)', padding: 4 }}>English</th>
-                          <th style={{ textAlign: 'left', borderBottom: '1px solid var(--border-color)', padding: 4 }}>HSK</th>
-                          <th style={{ textAlign: 'left', borderBottom: '1px solid var(--border-color)', padding: 4 }}>Action</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {article.words.map((word) => (
-                          <tr key={word.id}>
-                            <td style={{ padding: 4, borderBottom: '1px solid var(--border-light)' }}>{word.simplified}</td>
-                            <td
-                              style={{
-                                padding: 4,
-                                borderBottom: '1px solid var(--border-light)',
-                                cursor: 'pointer',
-                                textDecorationLine: 'underline',
-                                textDecorationStyle: 'dotted',
-                                textDecorationColor: 'rgba(255, 255, 255, 0.3)'
-                              }}
-                              onClick={() => speak(word.simplified)}
-                              title="Click to hear pronunciation"
-                            >
-                              {convertPinyinStyle(word.pinyin, pinyinStyle)}
-                            </td>
-                            <td style={{ padding: 4, borderBottom: '1px solid var(--border-light)' }}>{word.english}</td>
-                            <td style={{ padding: 4, borderBottom: '1px solid var(--border-light)' }}>{word.hskLevel}</td>
-                            <td style={{ padding: 4, borderBottom: '1px solid var(--border-light)' }}>
-                              <button
-                                className="learn-toggle"
-                                onClick={() => void (learnedSet.has(word.id) ? unlearn(word.id) : markLearned(word.id))}
-                                disabled={markingSet.has(word.id)}
-                                aria-pressed={learnedSet.has(word.id)}
-                                title={learnedSet.has(word.id) ? 'Unlearn this word' : 'Mark this word as learned'}
-                              >
-                                {markingSet.has(word.id) ? '⏳' : (learnedSet.has(word.id) ? '★ Done' : '☆ Learn')}
-                              </button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </section>
-              )}
-            </article>
-          ))}
-        </div>
-      )}
-    </div>
+                </article>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </>
   );
 }

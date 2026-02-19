@@ -119,10 +119,16 @@ jobs:
           sudo systemctl enable nginx
           sudo systemctl start nginx || sudo systemctl reload nginx
 
-          # Deploy backend container
-          docker pull 426719348382.dkr.ecr.us-east-1.amazonaws.com/chinese-backend:latest
+          # Free up disk space: remove stopped containers, dangling images, unused build cache
+          echo "🧹 Pruning unused Docker resources..."
           docker stop chinese-backend || true
           docker rm chinese-backend || true
+          docker image prune -af --filter "until=24h" || true
+          docker system prune -f || true
+          df -h /
+
+          # Deploy backend container
+          docker pull 426719348382.dkr.ecr.us-east-1.amazonaws.com/chinese-backend:latest
           docker run -d \
             --name chinese-backend \
             -p 3001:3001 \
