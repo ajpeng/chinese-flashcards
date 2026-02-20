@@ -205,13 +205,6 @@ function ArticleContent({
             className="word-token lookupable-char"
             style={{ cursor: 'pointer', borderBottom: '1px dotted rgba(150,150,150,0.3)', borderRadius: 2 }}
             onClick={(e) => { e.stopPropagation(); onCharClick(text); }}
-            onMouseEnter={(e) => {
-              const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-              const x = Math.max(70, Math.min(window.innerWidth - 70, rect.left + rect.width / 2));
-              const y = rect.top - 8;
-              (e.currentTarget as HTMLElement).style.setProperty('--popup-x', `${x}px`);
-              (e.currentTarget as HTMLElement).style.setProperty('--popup-y', `${y}px`);
-            }}
           >
             {tokenEl}
           </span>
@@ -242,20 +235,8 @@ function ArticleContent({
         }}
         onClick={(e) => { e.stopPropagation(); if (onWordClick) { onWordClick(wordData!); } else { speak(wordData!.simplified); } }}
         onDoubleClick={onStartReadingFromToken ? (e) => { e.stopPropagation(); onStartReadingFromToken(idx); } : undefined}
-        onMouseEnter={(e) => {
-          const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-          const x = Math.max(70, Math.min(window.innerWidth - 70, rect.left + rect.width / 2));
-          const y = rect.top - 8;
-          (e.currentTarget as HTMLElement).style.setProperty('--popup-x', `${x}px`);
-          (e.currentTarget as HTMLElement).style.setProperty('--popup-y', `${y}px`);
-        }}
       >
         {tokenEl}
-        <span className="token-popup" role="tooltip">
-          <span className="popup-pinyin">{convertPinyinStyle(wordData!.pinyin, pinyinStyle)}</span>
-          <span className="popup-english">{wordData!.english}</span>
-          <button type="button" className="speak-btn" onClick={(e) => { e.stopPropagation(); speak(wordData!.simplified); }} title="Listen">🔊</button>
-        </span>
       </span>
     );
   };
