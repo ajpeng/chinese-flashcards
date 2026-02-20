@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import AudioUpload from '../components/AudioUpload';
 import BrowserSTT from '../components/BrowserSTT';
 
 interface STTResponse {
@@ -7,29 +6,85 @@ interface STTResponse {
   confidence?: number;
   language?: string;
   duration?: number;
-  emotions?: string[];
-  events?: string[];
 }
+
+// Token-level alignment using dynamic programming (Wagner-Fischer).
+// Returns a diff of {expected, got, status} for each aligned pair.
+type DiffToken = { expected: string; got: string | null; status: 'correct' | 'wrong' | 'missing' | 'extra' };
+
+function alignTokens(expected: string[], got: string[]): DiffToken[] {
+  const m = expected.length;
+  const n = got.length;
+
+  // Build DP table for LCS
+  const dp: number[][] = Array.from({ length: m + 1 }, () => new Array(n + 1).fill(0));
+  for (let i = 1; i <= m; i++) {
+    for (let j = 1; j <= n; j++) {
+      dp[i][j] = expected[i - 1] === got[j - 1]
+        ? dp[i - 1][j - 1] + 1
+        : Math.max(dp[i - 1][j], dp[i][j - 1]);
+    }
+  }
+
+  // Backtrack to build alignment
+  const result: DiffToken[] = [];
+  let i = m, j = n;
+  while (i > 0 || j > 0) {
+    if (i > 0 && j > 0 && expected[i - 1] === got[j - 1]) {
+      result.unshift({ expected: expected[i - 1], got: got[j - 1], status: 'correct' });
+      i--; j--;
+    } else if (j > 0 && (i === 0 || dp[i][j - 1] >= dp[i - 1][j])) {
+      result.unshift({ expected: '', got: got[j - 1], status: 'extra' });
+      j--;
+    } else {
+      result.unshift({ expected: expected[i - 1], got: null, status: 'missing' });
+      i--;
+    }
+  }
+
+  // Merge adjacent missing+extra into substitution pairs
+  const merged: DiffToken[] = [];
+  let k = 0;
+  while (k < result.length) {
+    const cur = result[k];
+    const nxt = result[k + 1];
+    if (cur.status === 'missing' && nxt && nxt.status === 'extra') {
+      merged.push({ expected: cur.expected, got: nxt.got, status: 'wrong' });
+      k += 2;
+    } else {
+      merged.push(cur);
+      k++;
+    }
+  }
+  return merged;
+}
+
+function tokenizeForDiff(text: string): string[] {
+  // Strip punctuation, split into individual chars
+  return text.replace(/[。！？；，、：""''《》（）【】\s]/g, '').split('');
+}
+
+const exampleTexts = [
+  '你好，欢迎来到中文学习平台！',
+  '今天天气很好，我们去公园散步吧。',
+  '我喜欢学习中文，因为中文很有趣。',
+  '请问，最近的地铁站在哪里？',
+  '谢谢你的帮助，我很感激。',
+];
 
 export default function SpeechPractice(): React.ReactElement {
   const [transcriptionResult, setTranscriptionResult] = useState<string>('');
   const [practiceText, setPracticeText] = useState<string>('你好，欢迎来到中文学习平台！今天我们要练习说中文。请大声朗读这些句子，然后检查你的发音是否准确。');
-  const [recordedAudioUrl, setRecordedAudioUrl] = useState<string>('');
   const [isEditingText, setIsEditingText] = useState<boolean>(false);
   const [tempText, setTempText] = useState<string>('');
+  const [diff, setDiff] = useState<DiffToken[] | null>(null);
 
-  const handleTranscription = (result: STTResponse, audioUrl?: string) => {
+  const handleTranscription = (result: STTResponse) => {
     setTranscriptionResult(result.text);
-    if (audioUrl) {
-      setRecordedAudioUrl(audioUrl);
-    }
-    console.log('STT Result:', result);
-    
-    // If we have emotions/events, show them
-    if (result.emotions?.length || result.events?.length) {
-      console.log('Detected emotions:', result.emotions);
-      console.log('Detected events:', result.events);
-    }
+    // Auto-run diff when result arrives
+    const expected = tokenizeForDiff(practiceText);
+    const got = tokenizeForDiff(result.text);
+    setDiff(alignTokens(expected, got));
   };
 
   const handleSTTError = (error: string) => {
@@ -37,64 +92,13 @@ export default function SpeechPractice(): React.ReactElement {
     alert(`Speech recognition error: ${error}`);
   };
 
-  // Simple pronunciation scoring based on text similarity
-  const calculatePronunciationScore = (original: string, transcription: string): number => {
-    if (!original || !transcription) return 0;
-    
-    // Remove punctuation and normalize
-    const normalize = (text: string) => text.replace(/[。！？；，、：""''《》（）【】]/g, '').trim();
-    const normalizedOriginal = normalize(original);
-    const normalizedTranscription = normalize(transcription);
-    
-    if (normalizedOriginal === normalizedTranscription) {
-      return 100; // Perfect match
-    }
-    
-    // Calculate character-level similarity
-    let matches = 0;
-    const maxLength = Math.max(normalizedOriginal.length, normalizedTranscription.length);
-    
-    for (let i = 0; i < Math.min(normalizedOriginal.length, normalizedTranscription.length); i++) {
-      if (normalizedOriginal[i] === normalizedTranscription[i]) {
-        matches++;
-      }
-    }
-    
-    return Math.round((matches / maxLength) * 100);
-  };
-
-  const checkPronunciation = () => {
-    if (!transcriptionResult) {
-      alert('Please record your pronunciation first');
-      return;
-    }
-    
-    const score = calculatePronunciationScore(practiceText, transcriptionResult);
-    
-    // Provide feedback
-    let feedback = '';
-    if (score >= 90) {
-      feedback = '🎉 Excellent pronunciation!';
-    } else if (score >= 70) {
-      feedback = '👍 Good pronunciation, keep practicing!';
-    } else if (score >= 50) {
-      feedback = '📖 Fair pronunciation, try again!';
-    } else {
-      feedback = '💪 Keep practicing, you can do it!';
-    }
-    
-    alert(`Pronunciation Score: ${score}%\n${feedback}\n\nExpected: "${practiceText}"\nYou said: "${transcriptionResult}"`);  };
-
   const handleTextEdit = () => {
     if (isEditingText) {
-      // Save the edited text
       setPracticeText(tempText);
       setIsEditingText(false);
-      // Clear previous results when text changes
       setTranscriptionResult('');
-      setRecordedAudioUrl('');
+      setDiff(null);
     } else {
-      // Start editing
       setTempText(practiceText);
       setIsEditingText(true);
     }
@@ -107,358 +111,197 @@ export default function SpeechPractice(): React.ReactElement {
 
   const clearSession = () => {
     setTranscriptionResult('');
-    setRecordedAudioUrl('');
+    setDiff(null);
   };
 
-  const replayAudio = () => {
-    if (recordedAudioUrl) {
-      const audio = new Audio(recordedAudioUrl);
-      audio.play().catch(console.error);
-    }
-  };
-
-  const exampleTexts = [
-    '你好，欢迎来到中文学习平台！',
-    '今天天气很好，我们去公园散步吧。',
-    '我喜欢学习中文，因为中文很有趣。',
-    '请问，最近的地铁站在哪里？',
-    '谢谢你的帮助，我很感激。',
-  ];
+  // Compute score from diff
+  const score = diff
+    ? Math.round((diff.filter(d => d.status === 'correct').length / Math.max(1, tokenizeForDiff(practiceText).length)) * 100)
+    : null;
 
   return (
-    <div style={{ maxWidth: 960 }}>
-      <h2>🎤 Speech Practice</h2>
-      <p style={{ color: 'var(--muted-color)', marginBottom: 24 }}>
-        Practice your Chinese pronunciation with our speech recognition tools. 
-        Record yourself speaking Chinese and get instant feedback on your pronunciation accuracy.
+    <div style={{ maxWidth: 760, margin: '0 auto' }}>
+      <h2 style={{ margin: '0 0 4px', fontSize: 'clamp(20px,4vw,26px)', fontWeight: 700, letterSpacing: '-0.02em' }}>
+        Speech Practice
+      </h2>
+      <p style={{ color: 'var(--muted-color)', marginBottom: 28, fontSize: 13 }}>
+        Read the text aloud, then see exactly which characters you got right.
       </p>
 
-      {/* Practice Text Section */}
+      {/* Practice Text */}
       <div style={{
-        marginBottom: 24,
-        padding: 20,
-        border: '2px solid rgba(34, 197, 94, 0.3)',
+        marginBottom: 20,
+        padding: '18px 20px',
+        border: '1px solid var(--border-color)',
         borderRadius: 12,
-        backgroundColor: 'rgba(34, 197, 94, 0.05)'
+        background: 'var(--card-bg)',
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-          <h3 style={{ margin: 0, color: 'rgb(34, 197, 94)' }}>📝 Practice Text</h3>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+          <span style={{ fontSize: 12, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--muted-color)' }}>
+            Practice Text
+          </span>
           <button
             onClick={handleTextEdit}
             style={{
-              padding: '6px 12px',
-              backgroundColor: isEditingText ? 'rgba(220, 38, 38, 0.1)' : 'rgba(99, 102, 241, 0.1)',
-              border: `1px solid ${isEditingText ? 'rgb(220, 38, 38)' : 'rgb(99, 102, 241)'}`,
-              borderRadius: 4,
-              color: isEditingText ? 'rgb(220, 38, 38)' : 'rgb(99, 102, 241)',
-              cursor: 'pointer',
-              fontSize: '0.9em',
-              fontWeight: 'bold'
+              padding: '4px 10px', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer',
+              background: 'transparent',
+              border: `1px solid ${isEditingText ? 'rgba(220,38,38,0.5)' : 'var(--border-color)'}`,
+              color: isEditingText ? 'rgb(220,38,38)' : 'var(--muted-color)',
             }}
           >
-            {isEditingText ? '✅ Save' : '✏️ Edit'}
+            {isEditingText ? 'Save' : 'Edit'}
           </button>
         </div>
-        
+
         {isEditingText ? (
-          <div style={{ marginBottom: 16 }}>
+          <>
             <textarea
               value={tempText}
               onChange={(e) => setTempText(e.target.value)}
               placeholder="Enter Chinese text to practice..."
-              style={{
-                width: '100%',
-                minHeight: 100,
-                fontSize: '1.2em',
-                lineHeight: 1.8,
-                padding: 16,
-                backgroundColor: 'var(--card-background, rgba(255, 255, 255, 0.05))',
-                border: '2px solid rgb(99, 102, 241)',
-                borderRadius: 8,
-                color: 'inherit',
-                fontFamily: 'inherit',
-                resize: 'vertical'
-              }}
               autoFocus
+              style={{
+                width: '100%', minHeight: 90, fontSize: '1.15em', lineHeight: 1.8,
+                padding: 12, borderRadius: 8, resize: 'vertical',
+                background: 'var(--bg-secondary, rgba(128,128,128,0.06))',
+                border: '1px solid rgba(100,108,255,0.4)',
+                color: 'inherit', fontFamily: 'inherit', boxSizing: 'border-box',
+              }}
             />
-            <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
-              <button
-                onClick={cancelTextEdit}
-                style={{
-                  padding: '6px 12px',
-                  backgroundColor: 'rgba(107, 114, 128, 0.1)',
-                  border: '1px solid rgb(107, 114, 128)',
-                  borderRadius: 4,
-                  color: 'rgb(107, 114, 128)',
-                  cursor: 'pointer',
-                  fontSize: '0.9em'
-                }}
-              >
-                ❌ Cancel
+            <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
+              <button onClick={cancelTextEdit} style={{ padding: '4px 10px', borderRadius: 6, fontSize: 12, cursor: 'pointer', background: 'transparent', border: '1px solid var(--border-color)', color: 'var(--muted-color)' }}>
+                Cancel
               </button>
+              {exampleTexts.map((text, i) => (
+                <button
+                  key={i}
+                  onClick={() => setTempText(text)}
+                  style={{
+                    padding: '4px 10px', borderRadius: 6, fontSize: 12, cursor: 'pointer',
+                    background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.3)',
+                    color: 'rgb(34,197,94)', maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                  }}
+                  title={text}
+                >
+                  {text.length > 18 ? text.slice(0, 18) + '…' : text}
+                </button>
+              ))}
             </div>
-            
-            {/* Example Texts */}
-            <div style={{ marginTop: 12 }}>
-              <h4 style={{ margin: '0 0 8px 0', fontSize: '0.9em', color: 'var(--muted-color)' }}>
-                📚 Quick Examples:
-              </h4>
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                {exampleTexts.map((text, index) => (
-                  <button
-                    key={index}
-                    onClick={() => setTempText(text)}
-                    style={{
-                      padding: '4px 8px',
-                      backgroundColor: 'rgba(34, 197, 94, 0.1)',
-                      border: '1px solid rgba(34, 197, 94, 0.3)',
-                      borderRadius: 4,
-                      color: 'rgb(34, 197, 94)',
-                      cursor: 'pointer',
-                      fontSize: '0.8em',
-                      maxWidth: '200px',
-                      textOverflow: 'ellipsis',
-                      overflow: 'hidden',
-                      whiteSpace: 'nowrap'
-                    }}
-                    title={text}
-                  >
-                    {text.length > 20 ? text.substring(0, 20) + '...' : text}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
+          </>
         ) : (
-          <div style={{
-            fontSize: '1.2em',
-            lineHeight: 1.8,
-            padding: 16,
-            backgroundColor: 'var(--card-background, rgba(255, 255, 255, 0.05))',
-            borderRadius: 8,
-            border: '1px solid var(--border-color)',
-            marginBottom: 16,
-            minHeight: 60
-          }}>
+          <div style={{ fontSize: '1.3em', lineHeight: 2, letterSpacing: '0.03em' }}>
             {practiceText}
           </div>
         )}
-        
-        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-          <button
-            onClick={checkPronunciation}
-            disabled={!transcriptionResult}
-            style={{
-              padding: '10px 20px',
-              backgroundColor: transcriptionResult ? 'rgba(59, 130, 246, 0.1)' : 'rgba(128, 128, 128, 0.1)',
-              border: `1px solid ${transcriptionResult ? 'rgb(59, 130, 246)' : 'rgb(128, 128, 128)'}`,
-              borderRadius: 6,
-              color: transcriptionResult ? 'rgb(59, 130, 246)' : 'rgb(128, 128, 128)',
-              cursor: transcriptionResult ? 'pointer' : 'not-allowed',
-              fontSize: '1em',
-              fontWeight: 'bold'
-            }}
-          >
-            📊 Check My Pronunciation
-          </button>
-          
-          <button
-            onClick={clearSession}
-            style={{
-              padding: '10px 20px',
-              backgroundColor: 'rgba(107, 114, 128, 0.1)',
-              border: '1px solid rgb(107, 114, 128)',
-              borderRadius: 6,
-              color: 'rgb(107, 114, 128)',
-              cursor: 'pointer',
-              fontSize: '1em'
-            }}
-          >
-            🔄 Clear Session
-          </button>
-          
-          {recordedAudioUrl && (
-            <button
-              onClick={replayAudio}
-              style={{
-                padding: '10px 20px',
-                backgroundColor: 'rgba(168, 85, 247, 0.1)',
-                border: '1px solid rgb(168, 85, 247)',
-                borderRadius: 6,
-                color: 'rgb(168, 85, 247)',
-                cursor: 'pointer',
-                fontSize: '1em',
-                fontWeight: 'bold'
-              }}
-            >
-              🔊 Replay My Voice
-            </button>
+      </div>
+
+      {/* Recording */}
+      <div style={{ marginBottom: 20 }}>
+        <BrowserSTT
+          onTranscription={handleTranscription}
+          onError={handleSTTError}
+          language="zh-CN"
+        />
+      </div>
+
+      {/* Pronunciation diff result */}
+      {diff && (
+        <div style={{
+          marginBottom: 20,
+          padding: '18px 20px',
+          border: '1px solid var(--border-color)',
+          borderRadius: 12,
+          background: 'var(--card-bg)',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+            <span style={{ fontSize: 12, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--muted-color)' }}>
+              Result
+            </span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              {/* Score pill */}
+              <span style={{
+                fontSize: 13, fontWeight: 700, padding: '3px 12px', borderRadius: 99,
+                background: score! >= 90 ? 'rgba(16,185,129,0.15)' : score! >= 70 ? 'rgba(245,158,11,0.15)' : 'rgba(239,68,68,0.15)',
+                color: score! >= 90 ? 'rgb(16,185,129)' : score! >= 70 ? 'rgb(245,158,11)' : 'rgb(239,68,68)',
+                border: `1px solid ${score! >= 90 ? 'rgba(16,185,129,0.3)' : score! >= 70 ? 'rgba(245,158,11,0.3)' : 'rgba(239,68,68,0.3)'}`,
+              }}>
+                {score}%
+              </span>
+              <button onClick={clearSession} style={{ fontSize: 12, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--muted-color)' }}>
+                Clear
+              </button>
+            </div>
+          </div>
+
+          {/* Character-by-character diff */}
+          <div style={{ fontSize: '1.5em', lineHeight: 2.2, letterSpacing: '0.04em', flexWrap: 'wrap', display: 'flex', gap: '0 2px' }}>
+            {diff.map((token, i) => {
+              if (token.status === 'correct') {
+                return (
+                  <span key={i} style={{ color: 'rgb(16,185,129)', position: 'relative' }} title="Correct">
+                    {token.expected}
+                  </span>
+                );
+              }
+              if (token.status === 'missing') {
+                return (
+                  <span key={i} title="Missing" style={{ position: 'relative', display: 'inline-flex', flexDirection: 'column', alignItems: 'center' }}>
+                    <span style={{ color: 'rgb(239,68,68)', textDecoration: 'underline wavy rgb(239,68,68)' }}>
+                      {token.expected}
+                    </span>
+                    <span style={{ fontSize: '0.4em', color: 'rgb(239,68,68)', lineHeight: 1, whiteSpace: 'nowrap' }}>missed</span>
+                  </span>
+                );
+              }
+              if (token.status === 'wrong') {
+                return (
+                  <span key={i} title={`Expected: ${token.expected} — You said: ${token.got}`} style={{ position: 'relative', display: 'inline-flex', flexDirection: 'column', alignItems: 'center' }}>
+                    <span style={{ color: 'rgb(245,158,11)', textDecoration: 'underline wavy rgb(245,158,11)' }}>
+                      {token.expected}
+                    </span>
+                    <span style={{ fontSize: '0.4em', color: 'rgb(245,158,11)', lineHeight: 1, whiteSpace: 'nowrap' }}>
+                      ← {token.got}
+                    </span>
+                  </span>
+                );
+              }
+              if (token.status === 'extra') {
+                return (
+                  <span key={i} title={`Extra: ${token.got}`} style={{ position: 'relative', display: 'inline-flex', flexDirection: 'column', alignItems: 'center', opacity: 0.5 }}>
+                    <span style={{ color: 'var(--muted-color)', fontSize: '0.85em' }}>
+                      ({token.got})
+                    </span>
+                  </span>
+                );
+              }
+              return null;
+            })}
+          </div>
+
+          {/* Legend */}
+          <div style={{ display: 'flex', gap: 16, marginTop: 14, flexWrap: 'wrap', fontSize: 12 }}>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+              <span style={{ color: 'rgb(16,185,129)', fontWeight: 700 }}>字</span> Correct
+            </span>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+              <span style={{ color: 'rgb(239,68,68)', fontWeight: 700 }}>字</span> Missed
+            </span>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+              <span style={{ color: 'rgb(245,158,11)', fontWeight: 700 }}>字</span> Wrong character
+            </span>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+              <span style={{ color: 'var(--muted-color)' }}>字</span> Extra
+            </span>
+          </div>
+
+          {/* What you said */}
+          {transcriptionResult && (
+            <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid var(--border-light)', fontSize: 13, color: 'var(--muted-color)' }}>
+              You said: <span style={{ color: 'var(--text-color)' }}>{transcriptionResult}</span>
+            </div>
           )}
         </div>
-      </div>
-
-      {/* Speech Recognition Tools */}
-      <div style={{ marginBottom: 32 }}>
-        <h3 style={{ marginBottom: 16 }}>🎙️ Recording Tools</h3>
-        <div style={{ display: 'grid', gap: 20, gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))' }}>
-          {/* Browser Speech Recognition - Instant, no upload needed */}
-          <BrowserSTT 
-            onTranscription={(result, audioUrl) => handleTranscription(result, audioUrl)}
-            onError={handleSTTError}
-            language="zh-CN"
-          />
-          
-          {/* File Upload for Azure STT - Better accuracy */}
-          <AudioUpload 
-            onTranscription={(result) => handleTranscription(result)}
-            onError={handleSTTError}
-            provider="azure"
-          />
-        </div>
-      </div>
-
-      {/* Transcription Result */}
-      {transcriptionResult && (
-        <div style={{ 
-          marginBottom: 32,
-          padding: 20,
-          backgroundColor: 'rgba(59, 130, 246, 0.1)', 
-          border: '2px solid rgba(59, 130, 246, 0.3)', 
-          borderRadius: 12
-        }}>
-          <h3 style={{ margin: '0 0 12px 0', fontSize: '1.1em', color: 'rgb(59, 130, 246)' }}>📝 Your Recording:</h3>
-          <div style={{ 
-            fontSize: '1.2em', 
-            fontWeight: 'bold', 
-            marginBottom: 16,
-            padding: 16,
-            backgroundColor: 'var(--card-background, rgba(255, 255, 255, 0.05))',
-            borderRadius: 8,
-            border: '1px solid rgba(59, 130, 246, 0.2)'
-          }}>
-            "{transcriptionResult}"
-          </div>
-          
-          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-            <button
-              onClick={() => navigator.clipboard?.writeText(transcriptionResult)}
-              style={{
-                padding: '6px 12px',
-                background: 'rgba(59, 130, 246, 0.1)',
-                border: '1px solid rgb(59, 130, 246)',
-                borderRadius: 4,
-                fontSize: '0.9em',
-                cursor: 'pointer',
-                color: 'rgb(59, 130, 246)'
-              }}
-            >
-              📋 Copy Text
-            </button>
-            
-            <button
-              onClick={checkPronunciation}
-              style={{
-                padding: '6px 12px',
-                background: 'rgba(34, 197, 94, 0.1)',
-                border: '1px solid rgb(34, 197, 94)',
-                borderRadius: 4,
-                fontSize: '0.9em',
-                cursor: 'pointer',
-                color: 'rgb(34, 197, 94)'
-              }}
-            >
-              📊 Check Accuracy
-            </button>
-            
-            {recordedAudioUrl && (
-              <button
-                onClick={replayAudio}
-                style={{
-                  padding: '6px 12px',
-                  background: 'rgba(168, 85, 247, 0.1)',
-                  border: '1px solid rgb(168, 85, 247)',
-                  borderRadius: 4,
-                  fontSize: '0.9em',
-                  cursor: 'pointer',
-                  color: 'rgb(168, 85, 247)'
-                }}
-              >
-                🔊 Replay Audio
-              </button>
-            )}
-          </div>
-        </div>
       )}
-
-      {/* Instructions */}
-      <div style={{ 
-        padding: 20,
-        backgroundColor: 'rgba(99, 102, 241, 0.05)',
-        border: '1px solid rgba(99, 102, 241, 0.2)',
-        borderRadius: 8,
-        marginBottom: 24
-      }}>
-        <h3 style={{ margin: '0 0 12px 0', color: 'rgb(99, 102, 241)' }}>💡 How to Use</h3>
-        <div style={{ fontSize: '0.95em', lineHeight: 1.6 }}>
-          <strong>1. Choose your recording method:</strong>
-          <ul style={{ margin: '8px 0 16px 20px', padding: 0 }}>
-            <li><strong>Browser Recognition:</strong> Click "Listen" for instant voice recognition</li>
-            <li><strong>File Upload:</strong> Record audio and upload for higher accuracy with Azure STT</li>
-          </ul>
-          
-          <strong>2. Practice:</strong>
-          <ul style={{ margin: '8px 0 16px 20px', padding: 0 }}>
-            <li>Read the practice text aloud clearly</li>
-            <li>Speak at a natural pace</li>
-            <li>Try to pronounce each character clearly</li>
-          </ul>
-          
-          <strong>3. Get feedback:</strong>
-          <ul style={{ margin: '8px 0 0 20px', padding: 0 }}>
-            <li>Review your transcribed text</li>
-            <li>Click "Check My Pronunciation" for accuracy scoring</li>
-            <li>Practice again to improve your score!</li>
-          </ul>
-        </div>
-      </div>
-
-      {/* Additional Features */}
-      <div style={{ 
-        display: 'grid', 
-        gap: 16, 
-        gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
-        marginTop: 32
-      }}>
-        <div style={{
-          padding: 16,
-          border: '1px solid var(--border-color)',
-          borderRadius: 8,
-          backgroundColor: 'var(--card-background, rgba(255, 255, 255, 0.02))'
-        }}>
-          <h4 style={{ margin: '0 0 8px 0' }}>🎯 Pronunciation Tips</h4>
-          <ul style={{ margin: 0, padding: '0 0 0 16px', fontSize: '0.9em' }}>
-            <li>Speak clearly and at a moderate pace</li>
-            <li>Practice tone pronunciation carefully</li>
-            <li>Record in a quiet environment</li>
-            <li>Use headphones to avoid feedback</li>
-          </ul>
-        </div>
-
-        <div style={{
-          padding: 16,
-          border: '1px solid var(--border-color)',
-          borderRadius: 8,
-          backgroundColor: 'var(--card-background, rgba(255, 255, 255, 0.02))'
-        }}>
-          <h4 style={{ margin: '0 0 8px 0' }}>🔧 Technical Notes</h4>
-          <ul style={{ margin: 0, padding: '0 0 0 16px', fontSize: '0.9em' }}>
-            <li>Browser recognition works instantly</li>
-            <li>File upload provides higher accuracy</li>
-            <li>Supports WAV, MP3, M4A, MP4, FLAC formats</li>
-            <li>Maximum file size: 10MB</li>
-          </ul>
-        </div>
-      </div>
     </div>
   );
 }
