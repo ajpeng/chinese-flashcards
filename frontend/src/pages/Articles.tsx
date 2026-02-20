@@ -14,6 +14,17 @@ export type Word = {
   hskLevel: number;
 };
 
+// A word-like object from an on-demand dictionary lookup (no DB id)
+export type LookedUpWord = {
+  id: -1;
+  simplified: string;
+  pinyin: string;
+  english: string;
+  hskLevel: number | null;
+};
+
+export type DrawerWord = Word | LookedUpWord;
+
 export type Article = {
   id: number;
   title: string;
@@ -24,7 +35,8 @@ export type Article = {
   words: Word[];
 };
 
-type Token = { text: string; word?: Word };
+// lookupable=true means single Han character with no word match — can be looked up on click
+type Token = { text: string; word?: Word; lookupable?: boolean };
 
 function buildLookup(words: Word[]) {
   const map = new Map<string, Word>();
@@ -63,7 +75,8 @@ function tokenize(content: string, words: Word[]): Token[] {
       tokens.push({ text: content.substr(i, matchedLen), word: matched });
       i += matchedLen;
     } else {
-      tokens.push({ text: ch });
+      // Single Han character with no word match — mark as lookupable
+      tokens.push({ text: ch, lookupable: true });
       i++;
     }
   }
@@ -113,6 +126,7 @@ interface ArticleContentProps {
   backendTokens?: Array<{ text: string; word?: Word; index: number }>;
   wordTimings?: Array<{ word: string; start: number; duration: number; audioOffset: number }>;
   onWordClick?: (word: Word) => void;
+  onCharClick?: (char: string) => void;
 }
 
 function ArticleContent({
@@ -125,6 +139,7 @@ function ArticleContent({
   textVariant = 'simplified',
   backendTokens = [], wordTimings = [],
   onWordClick,
+  onCharClick,
 }: ArticleContentProps) {
 
   const tokens = useMemo(() => {
@@ -165,6 +180,7 @@ function ArticleContent({
     wordData: Word | undefined,
     idx: number,
     isHighlighted: boolean,
+    lookupable?: boolean,
   ) => {
     const hasWord = !!wordData;
     const isLearned = hasWord && learnedSet?.has(wordData!.id);
@@ -181,6 +197,26 @@ function ArticleContent({
     );
 
     if (!hasWord) {
+      if (lookupable && onCharClick) {
+        // Single unmatched Han character — make it clickable for on-demand lookup
+        return (
+          <span
+            key={key}
+            className="word-token lookupable-char"
+            style={{ cursor: 'pointer', borderBottom: '1px dotted rgba(150,150,150,0.3)', borderRadius: 2 }}
+            onClick={(e) => { e.stopPropagation(); onCharClick(text); }}
+            onMouseEnter={(e) => {
+              const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+              const x = Math.max(70, Math.min(window.innerWidth - 70, rect.left + rect.width / 2));
+              const y = rect.top - 8;
+              (e.currentTarget as HTMLElement).style.setProperty('--popup-x', `${x}px`);
+              (e.currentTarget as HTMLElement).style.setProperty('--popup-y', `${y}px`);
+            }}
+          >
+            {tokenEl}
+          </span>
+        );
+      }
       return <span key={key} style={{ whiteSpace: 'pre-wrap' }}>{tokenEl}</span>;
     }
 
@@ -241,7 +277,7 @@ function ArticleContent({
         }
         const t = (item as any).tokenData || item;
         const key = t.word ? `w-${t.word.id}-${idx}` : `t-${idx}`;
-        return renderToken(key, t.text, t.word, idx, idx === highlightedTokenIndex);
+        return renderToken(key, t.text, t.word, idx, idx === highlightedTokenIndex, t.lookupable);
       })}
     </div>
   );
@@ -252,19 +288,20 @@ function ArticleContent({
 function WordDrawer({
   word, learnedSet, markingSet, pinyinStyle, onClose, onToggle, onSpeak, onNavigate,
 }: {
-  word: Word | null;
+  word: DrawerWord | null;
   learnedSet: Set<number>;
   markingSet: Set<number>;
   pinyinStyle: 'marks' | 'numbers';
   onClose: () => void;
   onToggle: (id: number) => void;
   onSpeak: (text: string) => void;
-  onNavigate: (word: Word) => void;
+  onNavigate: (word: DrawerWord) => void;
 }) {
   const isOpen = !!word;
-  const isLearned = word ? learnedSet.has(word.id) : false;
-  const isMarking = word ? markingSet.has(word.id) : false;
-  const c = word ? (HSK_COLORS[word.hskLevel] ?? HSK_COLORS[1]) : HSK_COLORS[1];
+  const isLearned = word && word.id !== -1 ? learnedSet.has(word.id) : false;
+  const isMarking = word && word.id !== -1 ? markingSet.has(word.id) : false;
+  const hskLevel = word?.hskLevel;
+  const c = hskLevel ? (HSK_COLORS[hskLevel] ?? HSK_COLORS[1]) : { bg: 'rgba(128,128,128,0.12)', text: 'rgb(128,128,128)', border: 'rgba(128,128,128,0.3)' };
 
   return (
     <>
@@ -331,15 +368,27 @@ function WordDrawer({
               <div style={{ fontSize: 18, color: c.text, fontStyle: 'italic', marginTop: 6, opacity: 0.85 }}>
                 {convertPinyinStyle(word.pinyin, pinyinStyle)}
               </div>
-              <div style={{
-                display: 'inline-flex', alignItems: 'center', gap: 6,
-                marginTop: 10,
-                padding: '3px 10px', borderRadius: 99,
-                background: c.bg, border: `1px solid ${c.border}`,
-                fontSize: 11, fontWeight: 700, color: c.text, letterSpacing: '0.04em',
-              }}>
-                HSK {word.hskLevel}
-              </div>
+              {hskLevel ? (
+                <div style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 6,
+                  marginTop: 10,
+                  padding: '3px 10px', borderRadius: 99,
+                  background: c.bg, border: `1px solid ${c.border}`,
+                  fontSize: 11, fontWeight: 700, color: c.text, letterSpacing: '0.04em',
+                }}>
+                  HSK {hskLevel}
+                </div>
+              ) : (
+                <div style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 6,
+                  marginTop: 10,
+                  padding: '3px 10px', borderRadius: 99,
+                  background: 'rgba(128,128,128,0.1)', border: '1px solid rgba(128,128,128,0.25)',
+                  fontSize: 11, fontWeight: 700, color: 'var(--muted-color)', letterSpacing: '0.04em',
+                }}>
+                  Not in HSK
+                </div>
+              )}
             </div>
 
             {/* Definition */}
@@ -357,39 +406,43 @@ function WordDrawer({
 
             {/* Actions */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              {/* Save button */}
-              <button
-                onClick={() => onToggle(word.id)}
-                disabled={isMarking}
-                style={{
-                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-                  width: '100%', padding: '10px 0', borderRadius: 8,
-                  border: `1px solid ${isLearned ? 'rgba(59,130,246,0.4)' : 'var(--border-color)'}`,
-                  background: isLearned ? 'rgba(59,130,246,0.1)' : 'transparent',
-                  color: isLearned ? 'rgb(59,130,246)' : 'var(--muted-color)',
-                  fontSize: 13, fontWeight: 600, cursor: isMarking ? 'default' : 'pointer',
-                  opacity: isMarking ? 0.6 : 1,
-                  transition: 'all 0.15s',
-                }}
-              >
-                {isMarking ? '⏳ Saving…' : isLearned ? '★ Saved to flashcards' : '☆ Save to flashcards'}
-              </button>
+              {/* Save button — only for DB words */}
+              {word.id !== -1 && (
+                <button
+                  onClick={() => onToggle(word.id)}
+                  disabled={isMarking}
+                  style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                    width: '100%', padding: '10px 0', borderRadius: 8,
+                    border: `1px solid ${isLearned ? 'rgba(59,130,246,0.4)' : 'var(--border-color)'}`,
+                    background: isLearned ? 'rgba(59,130,246,0.1)' : 'transparent',
+                    color: isLearned ? 'rgb(59,130,246)' : 'var(--muted-color)',
+                    fontSize: 13, fontWeight: 600, cursor: isMarking ? 'default' : 'pointer',
+                    opacity: isMarking ? 0.6 : 1,
+                    transition: 'all 0.15s',
+                  }}
+                >
+                  {isMarking ? '⏳ Saving…' : isLearned ? '★ Saved to flashcards' : '☆ Save to flashcards'}
+                </button>
+              )}
 
-              {/* View in flashcards link */}
-              <button
-                onClick={() => onNavigate(word)}
-                style={{
-                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-                  width: '100%', padding: '10px 0', borderRadius: 8,
-                  border: '1px solid var(--border-color)',
-                  background: 'transparent',
-                  color: 'var(--link-color)',
-                  fontSize: 13, fontWeight: 600, cursor: 'pointer',
-                  transition: 'background 0.15s',
-                }}
-              >
-                View in Flashcards →
-              </button>
+              {/* View in flashcards link — only when HSK level known */}
+              {hskLevel && (
+                <button
+                  onClick={() => onNavigate(word)}
+                  style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                    width: '100%', padding: '10px 0', borderRadius: 8,
+                    border: '1px solid var(--border-color)',
+                    background: 'transparent',
+                    color: 'var(--link-color)',
+                    fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                    transition: 'background 0.15s',
+                  }}
+                >
+                  View in Flashcards →
+                </button>
+              )}
             </div>
           </div>
         )}
@@ -578,7 +631,9 @@ export default function Articles(): React.ReactElement {
   const [openArticleId, setOpenArticleId] = useState<number | null>(null);
 
   // Drawer state
-  const [drawerWord, setDrawerWord] = useState<Word | null>(null);
+  const [drawerWord, setDrawerWord] = useState<DrawerWord | null>(null);
+  // Cache for on-demand character lookups (simplified → LookedUpWord | null)
+  const charLookupCache = React.useRef<Map<string, LookedUpWord | null>>(new Map());
 
   // Reader settings
   const [showPinyin, setShowPinyin] = useState(false);
@@ -760,7 +815,31 @@ export default function Articles(): React.ReactElement {
     setDrawerWord(word);
   };
 
-  const handleNavigateToFlashcard = (word: Word) => {
+  const handleCharClick = async (char: string) => {
+    const cache = charLookupCache.current;
+    if (cache.has(char)) {
+      const cached = cache.get(char)!;
+      if (cached) setDrawerWord(cached);
+      return;
+    }
+    try {
+      const res = await fetch(`${API_URL}/api/words/lookup?q=${encodeURIComponent(char)}`);
+      if (!res.ok) { cache.set(char, null); return; }
+      const data = await res.json();
+      const entry: LookedUpWord = {
+        id: -1,
+        simplified: char,
+        pinyin: data.pinyin || '',
+        english: data.english || '',
+        hskLevel: data.hskLevel || null,
+      };
+      cache.set(char, entry);
+      setDrawerWord(entry);
+    } catch { cache.set(char, null); }
+  };
+
+  const handleNavigateToFlashcard = (word: DrawerWord) => {
+    if (!word.hskLevel) return;
     navigate(`/flashcards?word=${encodeURIComponent(word.simplified)}&level=${word.hskLevel}`);
   };
 
@@ -915,6 +994,7 @@ export default function Articles(): React.ReactElement {
                           backendTokens={readingArticleId === article.id ? tokens : []}
                           wordTimings={readingArticleId === article.id ? wordTimings : []}
                           onWordClick={handleWordClick}
+                          onCharClick={handleCharClick}
                         />
                       </div>
                     </div>
