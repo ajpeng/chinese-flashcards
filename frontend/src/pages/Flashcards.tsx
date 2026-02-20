@@ -223,9 +223,13 @@ export default function Flashcards() {
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
       if (view !== 'study' || cardFace === 'done') return;
-      if (e.key === ' ' || e.key === 'Enter') {
-        if (cardFace === 'front') setCardFace('back');
-      } else if (e.key === 'ArrowLeft') {
+      // Any key (except pure modifier keys) reveals the answer when on front
+      const isModifierOnly = ['Shift', 'Control', 'Alt', 'Meta', 'CapsLock', 'Tab', 'Escape'].includes(e.key);
+      if (cardFace === 'front' && !isModifierOnly) {
+        setCardFace('back');
+        return;
+      }
+      if (e.key === 'ArrowLeft') {
         if (cardFace === 'back') submitReview(2); // Hard
       } else if (e.key === 'ArrowRight') {
         if (cardFace === 'back') submitReview(5); // Easy
@@ -378,8 +382,9 @@ export default function Flashcards() {
           />
         </div>
 
-        {/* Card */}
+        {/* Card — click anywhere to reveal answer when on front */}
         <div
+          onClick={() => { if (cardFace === 'front') setCardFace('back'); }}
           style={{
             background: 'var(--bg-color, rgba(255,255,255,0.03))',
             border: '1px solid var(--border-color)',
@@ -392,6 +397,8 @@ export default function Flashcards() {
             alignItems: 'center',
             justifyContent: 'center',
             gap: 12,
+            cursor: cardFace === 'front' ? 'pointer' : 'default',
+            userSelect: 'none',
           }}
         >
           {/* Chinese characters */}

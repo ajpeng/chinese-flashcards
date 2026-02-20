@@ -190,7 +190,7 @@
 
 .word-token {
   cursor: pointer;
-  transition: background 120ms;
+  transition: background 120ms, color 120ms;
   position: relative;
   display: inline;
   border-radius: 3px;
@@ -205,21 +205,25 @@
 
 .word-token ruby {
   ruby-position: over;
-  display: inline-flex;
-  flex-direction: column-reverse;
-  align-items: center;
-  line-height: 1;
-  gap: 0.06rem;
+  /* Use inline-block (not inline-flex) so ruby layout is handled by the browser
+     natively — this prevents alignment from breaking when pinyin is toggled. */
+  display: inline;
   font-size: 1em;
 }
 
 .word-token ruby rt {
-  font-size: 0.5em;
-  color: var(--pinyin-color);
-  line-height: 1;
+  font-size: 0.48em;
+  color: var(--pinyin-color, rgba(128,128,128,0.75));
+  line-height: 1.1;
   display: block;
   font-weight: 500;
   letter-spacing: 0.03em;
+  transition: color 120ms;
+}
+
+/* On hover, tint the pinyin the same accent purple as the background highlight */
+.word-token:hover ruby rt {
+  color: rgba(168, 85, 247, 0.9);
 }
 
 /* TOKEN POPUP — uses position:fixed so it never clips at container edges */
