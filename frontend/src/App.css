@@ -205,10 +205,13 @@
 
 .word-token ruby {
   ruby-position: over;
-  /* Use inline-block (not inline-flex) so ruby layout is handled by the browser
-     natively — this prevents alignment from breaking when pinyin is toggled. */
-  display: inline;
+  display: inline-flex;
+  flex-direction: column-reverse;
+  align-items: center;
+  line-height: 1;
+  gap: 0.06rem;
   font-size: 1em;
+  vertical-align: bottom;
 }
 
 .word-token ruby rt {
