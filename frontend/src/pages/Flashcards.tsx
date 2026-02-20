@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { convertPinyinStyle } from '../utils/pinyin';
 
@@ -52,6 +53,7 @@ const HSK_LABELS: Record<number, string> = {
 export default function Flashcards() {
   const { user, accessToken, loading } = useAuth();
   const pinyinStyle = user?.pinyinStyle ?? 'marks';
+  const [searchParams, setSearchParams] = useSearchParams();
 
   // Deck selection
   const [view, setView] = useState<View>('decks');
@@ -73,6 +75,8 @@ export default function Flashcards() {
   const [previewLevel, setPreviewLevel] = useState(0);
   const [previewCards, setPreviewCards] = useState<StudyCard[]>([]);
   const [previewLoading, setPreviewLoading] = useState(false);
+  const [highlightedWord, setHighlightedWord] = useState<string | null>(null);
+  const highlightedRowRef = useRef<HTMLDivElement | null>(null);
 
   const currentCard = cards[cardIndex] ?? null;
   const submittingRef = useRef(false);
@@ -102,6 +106,27 @@ export default function Flashcards() {
     if (user && accessToken) fetchDecks();
     else setDecksLoading(false);
   }, [user, accessToken, fetchDecks]);
+
+  // ── Deep-link: ?word=有&level=1 → open preview and highlight word ──────────
+  useEffect(() => {
+    const wordParam = searchParams.get('word');
+    const levelParam = searchParams.get('level');
+    if (!wordParam || !levelParam || !accessToken) return;
+    const level = parseInt(levelParam, 10);
+    if (isNaN(level)) return;
+
+    setHighlightedWord(wordParam);
+    startPreview(level);
+    // Clear params so back-navigation works cleanly
+    setSearchParams({}, { replace: true });
+  }, [accessToken]); // run once when accessToken is ready
+
+  // ── Scroll highlighted word into view after preview loads ─────────────────
+  useEffect(() => {
+    if (highlightedWord && highlightedRowRef.current) {
+      highlightedRowRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }, [highlightedWord, previewCards]);
 
   // ── Start study session ────────────────────────────────────────────────────
 
@@ -491,18 +516,22 @@ export default function Flashcards() {
 
         {/* Word list */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {previewCards.map(card => (
+          {previewCards.map(card => {
+            const isHighlighted = card.simplified === highlightedWord;
+            return (
             <div
               key={card.wordId}
+              ref={isHighlighted ? highlightedRowRef : null}
               style={{
                 display: 'grid',
                 gridTemplateColumns: 'auto 1fr auto',
                 alignItems: 'center',
                 gap: '0 10px',
-                background: 'var(--bg-color, rgba(255,255,255,0.03))',
-                border: '1px solid var(--border-color)',
+                background: isHighlighted ? 'rgba(100,108,255,0.1)' : 'var(--bg-color, rgba(255,255,255,0.03))',
+                border: isHighlighted ? '1px solid rgba(100,108,255,0.4)' : '1px solid var(--border-color)',
                 borderRadius: 10,
                 padding: '10px 12px',
+                transition: 'background 0.3s, border-color 0.3s',
               }}
             >
               {/* Chinese character */}
@@ -535,7 +564,8 @@ export default function Flashcards() {
                 {card.isNew ? 'New' : `${card.interval}d`}
               </span>
             </div>
-          ))}
+            );
+          })}
         </div>
       </div>
     );

@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { convertPinyinStyle } from '../utils/pinyin';
 import { convertChineseText } from '../utils/chinese-conversion';
@@ -110,6 +111,7 @@ interface ArticleContentProps {
   textVariant?: 'simplified' | 'traditional';
   backendTokens?: Array<{ text: string; word?: Word; index: number }>;
   wordTimings?: Array<{ word: string; start: number; duration: number; audioOffset: number }>;
+  onWordClick?: (word: Word) => void;
 }
 
 function ArticleContent({
@@ -121,6 +123,7 @@ function ArticleContent({
   onStartReadingFromToken,
   textVariant = 'simplified',
   backendTokens = [], wordTimings = [],
+  onWordClick,
 }: ArticleContentProps) {
 
   const tokens = useMemo(() => {
@@ -200,7 +203,7 @@ function ArticleContent({
           transition: 'background 0.15s',
           paddingBottom: showPinyin ? 0 : 1,
         }}
-        onClick={(e) => { e.stopPropagation(); speak(wordData!.simplified); }}
+        onClick={(e) => { e.stopPropagation(); if (onWordClick) { onWordClick(wordData!); } else { speak(wordData!.simplified); } }}
         onDoubleClick={onStartReadingFromToken ? (e) => { e.stopPropagation(); onStartReadingFromToken(idx); } : undefined}
       >
         {tokenEl}
@@ -251,89 +254,154 @@ function ArticleContent({
   );
 }
 
-// ── Vocabulary pill list ──────────────────────────────────────────────────────
-function VocabList({
-  words, learnedSet, markingSet, pinyinStyle, onToggle, onSpeak,
+
+// ── Word definition drawer ────────────────────────────────────────────────────
+function WordDrawer({
+  word, learnedSet, markingSet, pinyinStyle, onClose, onToggle, onSpeak, onNavigate,
 }: {
-  words: Word[];
+  word: Word | null;
   learnedSet: Set<number>;
   markingSet: Set<number>;
   pinyinStyle: 'marks' | 'numbers';
+  onClose: () => void;
   onToggle: (id: number) => void;
   onSpeak: (text: string) => void;
+  onNavigate: (word: Word) => void;
 }) {
-  const [expanded, setExpanded] = useState(false);
-  const PREVIEW = 12;
-  const shown = expanded ? words : words.slice(0, PREVIEW);
+  const isOpen = !!word;
+  const isLearned = word ? learnedSet.has(word.id) : false;
+  const isMarking = word ? markingSet.has(word.id) : false;
+  const c = word ? (HSK_COLORS[word.hskLevel] ?? HSK_COLORS[1]) : HSK_COLORS[1];
 
   return (
-    <div style={{ marginTop: 28, borderTop: '1px solid var(--border-light)', paddingTop: 20 }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-        <h4 style={{ margin: 0, fontSize: 13, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--muted-color)' }}>
-          Vocabulary · {words.length} words
-        </h4>
-        {words.length > PREVIEW && (
+    <>
+      {/* Backdrop */}
+      {isOpen && (
+        <div
+          onClick={onClose}
+          style={{
+            position: 'fixed', inset: 0, zIndex: 299,
+            background: 'transparent',
+          }}
+        />
+      )}
+
+      {/* Drawer panel */}
+      <div style={{
+        position: 'fixed',
+        top: 0, right: 0, bottom: 0,
+        width: 300,
+        zIndex: 300,
+        background: 'var(--card-bg)',
+        borderLeft: '1px solid var(--border-color)',
+        boxShadow: '-8px 0 32px rgba(0,0,0,0.18)',
+        transform: isOpen ? 'translateX(0)' : 'translateX(100%)',
+        transition: 'transform 0.25s cubic-bezier(0.4,0,0.2,1)',
+        display: 'flex',
+        flexDirection: 'column',
+        overflow: 'hidden',
+      }}>
+        {/* Header */}
+        <div style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          padding: '14px 18px',
+          borderBottom: '1px solid var(--border-light)',
+          flexShrink: 0,
+        }}>
+          <span style={{ fontSize: 12, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--muted-color)' }}>
+            Definition
+          </span>
           <button
-            onClick={() => setExpanded(e => !e)}
-            style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, color: 'var(--link-color)', padding: 0 }}
+            onClick={onClose}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 20, color: 'var(--muted-color)', lineHeight: 1, padding: '0 2px' }}
+            aria-label="Close"
           >
-            {expanded ? 'Show less ↑' : `Show all ${words.length} ↓`}
+            ×
           </button>
-        )}
-      </div>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-        {shown.map(word => {
-          const isLearned = learnedSet.has(word.id);
-          const isMarking = markingSet.has(word.id);
-          const c = HSK_COLORS[word.hskLevel] ?? HSK_COLORS[1];
-          return (
-            <div
-              key={word.id}
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 6,
-                padding: '6px 10px',
-                borderRadius: 8,
-                border: `1px solid ${isLearned ? 'rgba(59,130,246,0.35)' : 'var(--border-color)'}`,
-                background: isLearned ? 'rgba(59,130,246,0.07)' : 'var(--card-bg)',
-                cursor: 'default',
-                transition: 'border-color 0.15s, background 0.15s',
-                fontSize: 13,
-              }}
-            >
-              {/* Chinese + pinyin */}
+        </div>
+
+        {/* Content */}
+        {word && (
+          <div style={{ flex: 1, overflowY: 'auto', padding: '24px 18px', display: 'flex', flexDirection: 'column', gap: 20 }}>
+
+            {/* Big character + pinyin */}
+            <div style={{ textAlign: 'center' }}>
               <button
                 onClick={() => onSpeak(word.simplified)}
-                title="Listen to pronunciation"
-                style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', lineHeight: 1.2 }}
+                title="Listen"
+                style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
               >
-                <span style={{ fontSize: 18, fontWeight: 700, color: c.text }}>{word.simplified}</span>
-                <span style={{ fontSize: 10, color: 'var(--muted-color)', marginTop: 1 }}>{convertPinyinStyle(word.pinyin, pinyinStyle)}</span>
+                <div style={{ fontSize: 64, fontWeight: 600, lineHeight: 1.1, color: c.text }}>
+                  {word.simplified}
+                </div>
               </button>
-              {/* English */}
-              <span style={{ color: 'var(--muted-color)', fontSize: 12, maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              <div style={{ fontSize: 18, color: c.text, fontStyle: 'italic', marginTop: 6, opacity: 0.85 }}>
+                {convertPinyinStyle(word.pinyin, pinyinStyle)}
+              </div>
+              <div style={{
+                display: 'inline-flex', alignItems: 'center', gap: 6,
+                marginTop: 10,
+                padding: '3px 10px', borderRadius: 99,
+                background: c.bg, border: `1px solid ${c.border}`,
+                fontSize: 11, fontWeight: 700, color: c.text, letterSpacing: '0.04em',
+              }}>
+                HSK {word.hskLevel}
+              </div>
+            </div>
+
+            {/* Definition */}
+            <div style={{
+              background: 'var(--bg-secondary, rgba(128,128,128,0.06))',
+              borderRadius: 10, padding: '14px 16px',
+            }}>
+              <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--muted-color)', marginBottom: 8 }}>
+                Meaning
+              </div>
+              <div style={{ fontSize: 14, lineHeight: 1.6, color: 'var(--text-color)' }}>
                 {word.english}
-              </span>
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               {/* Save button */}
               <button
                 onClick={() => onToggle(word.id)}
                 disabled={isMarking}
-                title={isLearned ? 'Unlearn' : 'Save'}
                 style={{
-                  background: 'none', border: 'none', cursor: isMarking ? 'default' : 'pointer',
-                  padding: '1px 2px', fontSize: 14, opacity: isMarking ? 0.5 : 1,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                  width: '100%', padding: '10px 0', borderRadius: 8,
+                  border: `1px solid ${isLearned ? 'rgba(59,130,246,0.4)' : 'var(--border-color)'}`,
+                  background: isLearned ? 'rgba(59,130,246,0.1)' : 'transparent',
                   color: isLearned ? 'rgb(59,130,246)' : 'var(--muted-color)',
-                  transition: 'color 0.15s',
+                  fontSize: 13, fontWeight: 600, cursor: isMarking ? 'default' : 'pointer',
+                  opacity: isMarking ? 0.6 : 1,
+                  transition: 'all 0.15s',
                 }}
               >
-                {isMarking ? '⏳' : isLearned ? '★' : '☆'}
+                {isMarking ? '⏳ Saving…' : isLearned ? '★ Saved to flashcards' : '☆ Save to flashcards'}
+              </button>
+
+              {/* View in flashcards link */}
+              <button
+                onClick={() => onNavigate(word)}
+                style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                  width: '100%', padding: '10px 0', borderRadius: 8,
+                  border: '1px solid var(--border-color)',
+                  background: 'transparent',
+                  color: 'var(--link-color)',
+                  fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                  transition: 'background 0.15s',
+                }}
+              >
+                View in Flashcards →
               </button>
             </div>
-          );
-        })}
+          </div>
+        )}
       </div>
-    </div>
+    </>
   );
 }
 
@@ -510,10 +578,14 @@ function AudioElement({ src, articleId }: { src: string; articleId: number }) {
 
 // ── Main Articles page ────────────────────────────────────────────────────────
 export default function Articles(): React.ReactElement {
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<Article[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [openArticleId, setOpenArticleId] = useState<number | null>(null);
+
+  // Drawer state
+  const [drawerWord, setDrawerWord] = useState<Word | null>(null);
 
   // Reader settings
   const [showPinyin, setShowPinyin] = useState(false);
@@ -691,9 +763,28 @@ export default function Articles(): React.ReactElement {
 
   useEffect(() => { void fetchArticles(); }, []);
 
+  const handleWordClick = (word: Word) => {
+    setDrawerWord(word);
+    speak(word.simplified);
+  };
+
+  const handleNavigateToFlashcard = (word: Word) => {
+    navigate(`/flashcards?word=${encodeURIComponent(word.simplified)}&level=${word.hskLevel}`);
+  };
+
   // ── Render ──────────────────────────────────────────────────────────────────
   return (
     <>
+      <WordDrawer
+        word={drawerWord}
+        learnedSet={learnedSet}
+        markingSet={markingSet}
+        pinyinStyle={pinyinStyle}
+        onClose={() => setDrawerWord(null)}
+        onToggle={(id) => void toggleLearn(id)}
+        onSpeak={speak}
+        onNavigate={handleNavigateToFlashcard}
+      />
       <style>{`
         .article-card { transition: box-shadow 0.2s ease, border-color 0.2s ease; }
         .article-card:hover { box-shadow: 0 4px 20px rgba(0,0,0,0.12); }
@@ -722,7 +813,7 @@ export default function Articles(): React.ReactElement {
           <div>
             <h2 style={{ margin: 0, fontSize: 'clamp(20px,4vw,26px)', fontWeight: 700, letterSpacing: '-0.02em' }}>Articles</h2>
             <p style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--muted-color)' }}>
-              Click any word to hear it · hover for definition · ★ to save
+              Click any word for definition · double-click to read from there
             </p>
           </div>
           <button onClick={fetchArticles} disabled={loading} className="article-list-btn article-list-btn-ghost" style={{ border: '1px solid var(--border-color)' }}>
@@ -831,20 +922,9 @@ export default function Articles(): React.ReactElement {
                           textVariant={localTextVariant}
                           backendTokens={readingArticleId === article.id ? tokens : []}
                           wordTimings={readingArticleId === article.id ? wordTimings : []}
+                          onWordClick={handleWordClick}
                         />
                       </div>
-
-                      {/* Vocabulary */}
-                      {article.words.length > 0 && (
-                        <VocabList
-                          words={article.words}
-                          learnedSet={learnedSet}
-                          markingSet={markingSet}
-                          pinyinStyle={pinyinStyle}
-                          onToggle={(id) => void toggleLearn(id)}
-                          onSpeak={speak}
-                        />
-                      )}
                     </div>
                   )}
                 </article>
