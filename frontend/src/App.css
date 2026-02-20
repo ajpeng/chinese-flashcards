@@ -222,11 +222,11 @@
   letter-spacing: 0.03em;
 }
 
-/* TOKEN POPUP */
+/* TOKEN POPUP — uses position:fixed so it never clips at container edges */
 .token-popup {
-  position: absolute;
-  bottom: calc(100% + 8px);
-  left: 50%;
+  position: fixed;
+  left: var(--popup-x, 50%);
+  top: var(--popup-y, 100px);
   transform: translateX(-50%) translateY(4px);
   display: flex;
   flex-direction: column;
@@ -244,7 +244,7 @@
   visibility: hidden;
   pointer-events: none;
   z-index: 200;
-  transition: opacity 100ms ease, transform 100ms ease, visibility 100ms ease;
+  transition: opacity 100ms ease, visibility 100ms ease;
   text-align: center;
   white-space: nowrap;
 }
@@ -273,65 +273,32 @@
   line-height: 1.3;
 }
 
-.token-popup .popup-actions {
-  display: flex;
-  gap: 6px;
-  align-items: center;
-  margin-top: 2px;
-}
 
-.token-popup::after {
-  content: '';
-  position: absolute;
-  bottom: -7px;
-  left: 50%;
-  transform: translateX(-50%);
-  border-width: 7px 7px 0 7px;
-  border-style: solid;
-  border-color: var(--popup-bg) transparent transparent transparent;
-}
+/* caret removed — popup uses position:fixed so absolute caret would misalign */
 
 .word-token:focus { outline: none; }
 
-.token-popup .speak-btn,
-.token-popup .save-btn {
+.token-popup .speak-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   height: 26px;
   min-width: 32px;
   padding: 3px 7px;
-  font-size: 13px;
+  font-size: 15px;
   background: transparent;
   border: 1px solid var(--border-color);
   border-radius: 6px;
   line-height: 1;
   cursor: pointer;
   transition: background 120ms, transform 120ms;
-  z-index: 55;
   color: var(--popup-text);
+  margin-top: 2px;
 }
-
-.token-popup .speak-btn { font-size: 15px; }
-.token-popup .save-btn { color: rgb(245,158,11); }
 
 .token-popup .speak-btn:hover { background: rgba(255,255,255,0.08); transform: scale(1.1); }
-.token-popup .save-btn:hover { background: rgba(245,158,11,0.12); transform: scale(1.1); }
-
-.token-popup .save-btn[disabled] { opacity: 0.5; cursor: default; transform: none; }
 
 .word-token ruby rt { position: relative; z-index: 30; }
-
-.token-popup .saved-confirm {
-  background: rgba(16,185,129,0.15);
-  color: rgb(16,185,129);
-  border: 1px solid rgba(16,185,129,0.3);
-  padding: 3px 8px;
-  border-radius: 6px;
-  font-weight: 600;
-  font-size: 0.8em;
-  white-space: nowrap;
-}
 
 /* ── Learn toggle ──────────────────────────────────────────────────────────── */
 

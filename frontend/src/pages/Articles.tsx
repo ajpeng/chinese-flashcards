@@ -115,8 +115,8 @@ interface ArticleContentProps {
 }
 
 function ArticleContent({
-  content, words, showPinyin = false, onToggle,
-  markingSet, savedSet, learnedSet,
+  content, words, showPinyin = false,
+  learnedSet,
   pinyinStyle = 'marks', fontSize = 'medium',
   highlightedTokenIndex = -1,
   selectedVoice = '', speechRate = 0.8,
@@ -205,27 +205,19 @@ function ArticleContent({
         }}
         onClick={(e) => { e.stopPropagation(); if (onWordClick) { onWordClick(wordData!); } else { speak(wordData!.simplified); } }}
         onDoubleClick={onStartReadingFromToken ? (e) => { e.stopPropagation(); onStartReadingFromToken(idx); } : undefined}
+        onMouseEnter={(e) => {
+          const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+          const x = Math.max(70, Math.min(window.innerWidth - 70, rect.left + rect.width / 2));
+          const y = rect.top - 8;
+          (e.currentTarget as HTMLElement).style.setProperty('--popup-x', `${x}px`);
+          (e.currentTarget as HTMLElement).style.setProperty('--popup-y', `${y}px`);
+        }}
       >
         {tokenEl}
         <span className="token-popup" role="tooltip">
           <span className="popup-pinyin">{convertPinyinStyle(wordData!.pinyin, pinyinStyle)}</span>
           <span className="popup-english">{wordData!.english}</span>
-          <span className="popup-actions">
-            <button type="button" className="speak-btn" onClick={() => speak(wordData!.simplified)} title="Listen">🔊</button>
-            {onToggle && (
-              <button
-                type="button"
-                className="save-btn"
-                onClick={async () => { await onToggle(wordData!.id); }}
-                disabled={markingSet?.has(wordData!.id)}
-                title={isLearned ? 'Unlearn word' : 'Save word'}
-                aria-pressed={isLearned}
-              >
-                {markingSet?.has(wordData!.id) ? '⏳' : isLearned ? '★' : '☆'}
-              </button>
-            )}
-            {savedSet?.has(wordData!.id) && <span className="saved-confirm">Saved!</span>}
-          </span>
+          <button type="button" className="speak-btn" onClick={(e) => { e.stopPropagation(); speak(wordData!.simplified); }} title="Listen">🔊</button>
         </span>
       </span>
     );
@@ -765,7 +757,6 @@ export default function Articles(): React.ReactElement {
 
   const handleWordClick = (word: Word) => {
     setDrawerWord(word);
-    speak(word.simplified);
   };
 
   const handleNavigateToFlashcard = (word: Word) => {
