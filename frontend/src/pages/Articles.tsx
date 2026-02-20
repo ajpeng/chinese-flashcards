@@ -30,6 +30,7 @@ function buildLookup(words: Word[]) {
   const map = new Map<string, Word>();
   let maxLen = 1;
   for (const w of words) {
+    if (!w.english) continue; // skip words with no definition
     map.set(w.simplified, w);
     maxLen = Math.max(maxLen, w.simplified.length);
   }

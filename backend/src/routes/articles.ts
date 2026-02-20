@@ -85,7 +85,7 @@ router.post(
 
       const isChinese = (text: string) => /[\u4E00-\u9FFF]/.test(text);
       const validSegments = segments.filter(
-        (seg) => seg.text.trim().length > 0 && isChinese(seg.text)
+        (seg) => seg.text.trim().length > 0 && isChinese(seg.text) && !!seg.english
       );
 
       if (validSegments.length > 0) {
