@@ -65,3 +65,6 @@ Thumbs.db
 !backend/rds-ca-bundle.pem
 *.key
 pids/WARP.md
+
+# Claude
+.claude/
