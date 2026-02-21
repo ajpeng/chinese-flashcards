@@ -93,6 +93,126 @@ router.get('/decks', requireAuth, async (req: Request, res: Response) => {
   }
 });
 
+// GET /api/srs/saved — deck stats for words saved from articles
+router.get('/saved', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const userId = req.user!.userId;
+    const now = new Date();
+
+    const savedCards = await prisma.flashcard.findMany({
+      where: {
+        userId,
+        word: { articleId: { not: null } },
+      },
+      select: {
+        nextReviewAt: true,
+        word: { select: { hskLevel: true } },
+      },
+    });
+
+    const dueCards = savedCards.filter(c => c.nextReviewAt <= now).length;
+
+    res.json({
+      totalWords: savedCards.length,
+      studiedCards: savedCards.length,
+      dueCards,
+    });
+  } catch (error) {
+    console.error('SRS saved deck error:', error);
+    res.status(500).json({ error: 'Failed to load saved deck stats' });
+  }
+});
+
+// GET /api/srs/study/saved — study session for saved-from-articles words
+router.get('/study/saved', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const userId = req.user!.userId;
+    const now = new Date();
+
+    const MAX_SESSION = 20;
+
+    const savedCards = await prisma.flashcard.findMany({
+      where: {
+        userId,
+        word: { articleId: { not: null } },
+      },
+      select: {
+        id: true,
+        wordId: true,
+        easeFactor: true,
+        interval: true,
+        repetitions: true,
+        nextReviewAt: true,
+        word: {
+          select: { simplified: true, pinyin: true, english: true, hskLevel: true },
+        },
+      },
+      orderBy: { nextReviewAt: 'asc' },
+    });
+
+    const dueCards = savedCards
+      .filter(c => c.nextReviewAt <= now)
+      .map(c => ({
+        flashcardId: c.id,
+        wordId: c.wordId,
+        simplified: c.word.simplified,
+        pinyin: c.word.pinyin ?? '',
+        english: c.word.english ?? '',
+        hskLevel: c.word.hskLevel,
+        interval: c.interval,
+        repetitions: c.repetitions,
+        easeFactor: c.easeFactor,
+        isNew: false,
+      }));
+
+    const sessionCards = dueCards.slice(0, MAX_SESSION);
+
+    res.json(sessionCards);
+  } catch (error) {
+    console.error('SRS study saved error:', error);
+    res.status(500).json({ error: 'Failed to load study cards' });
+  }
+});
+
+// GET /api/srs/preview/saved — browse all saved-from-articles words
+router.get('/preview/saved', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const userId = req.user!.userId;
+
+    const savedCards = await prisma.flashcard.findMany({
+      where: {
+        userId,
+        word: { articleId: { not: null } },
+      },
+      select: {
+        wordId: true,
+        interval: true,
+        nextReviewAt: true,
+        word: {
+          select: { simplified: true, pinyin: true, english: true, hskLevel: true },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    const previewCards = savedCards.map(c => ({
+      wordId: c.wordId,
+      simplified: c.word.simplified,
+      pinyin: c.word.pinyin ?? '',
+      english: c.word.english ?? '',
+      hskLevel: c.word.hskLevel,
+      isNew: false,
+      interval: c.interval,
+      nextReviewAt: c.nextReviewAt,
+    }));
+
+    res.json(previewCards);
+  } catch (error) {
+    console.error('SRS preview saved error:', error);
+    res.status(500).json({ error: 'Failed to load preview cards' });
+  }
+});
+
 // GET /api/srs/study/:level — fetch up to 20 cards due for review
 router.get(
   '/study/:level',

@@ -22,19 +22,26 @@ type DeckStats = {
   dueCards: number;
 };
 
+type SavedDeckStats = {
+  totalWords: number;
+  studiedCards: number;
+  dueCards: number;
+};
+
 type StudyCard = {
   flashcardId: string | null;
   wordId: number;
   simplified: string;
   pinyin: string;
   english: string;
-  hskLevel: number;
+  hskLevel: number | null;
   interval: number;
   repetitions: number;
   easeFactor: number;
   isNew: boolean;
 };
 
+type StudyLevel = number | 'saved';
 type View = 'decks' | 'study' | 'preview';
 type CardFace = 'front' | 'back' | 'done';
 
@@ -66,11 +73,12 @@ export default function Flashcards() {
   // Deck selection
   const [view, setView] = useState<View>('decks');
   const [decks, setDecks] = useState<DeckStats[]>([]);
+  const [savedDeck, setSavedDeck] = useState<SavedDeckStats | null>(null);
   const [decksLoading, setDecksLoading] = useState(true);
   const [decksError, setDecksError] = useState<string | null>(null);
 
   // Study session
-  const [studyLevel, setStudyLevel] = useState(0);
+  const [studyLevel, setStudyLevel] = useState<StudyLevel>(0);
   const [cards, setCards] = useState<StudyCard[]>([]);
   const [cardIndex, setCardIndex] = useState(0);
   const [cardFace, setCardFace] = useState<CardFace>('front');
@@ -80,7 +88,7 @@ export default function Flashcards() {
   const [studyLoading, setStudyLoading] = useState(false);
 
   // Preview session
-  const [previewLevel, setPreviewLevel] = useState(0);
+  const [previewLevel, setPreviewLevel] = useState<StudyLevel>(0);
   const [previewCards, setPreviewCards] = useState<StudyCard[]>([]);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [highlightedWord, setHighlightedWord] = useState<string | null>(null);
@@ -91,8 +99,10 @@ export default function Flashcards() {
 
   // Dynamic page title
   usePageTitle(
-    view === 'study' ? `Study HSK ${studyLevel}`
-    : view === 'preview' ? `Browse HSK ${previewLevel}`
+    view === 'study'
+      ? studyLevel === 'saved' ? 'Study Saved Words' : `Study HSK ${studyLevel}`
+    : view === 'preview'
+      ? previewLevel === 'saved' ? 'Browse Saved Words' : `Browse HSK ${previewLevel}`
     : 'Flashcards'
   );
 
@@ -103,13 +113,23 @@ export default function Flashcards() {
     setDecksLoading(true);
     setDecksError(null);
     try {
-      const res = await fetch(`${API_URL}/api/srs/decks`, {
-        headers: { Authorization: `Bearer ${accessToken}` },
-        credentials: 'include',
-      });
-      if (!res.ok) throw new Error('Failed to load decks');
-      const data: DeckStats[] = await res.json();
-      setDecks(data);
+      const [hskRes, savedRes] = await Promise.all([
+        fetch(`${API_URL}/api/srs/decks`, {
+          headers: { Authorization: `Bearer ${accessToken}` },
+          credentials: 'include',
+        }),
+        fetch(`${API_URL}/api/srs/saved`, {
+          headers: { Authorization: `Bearer ${accessToken}` },
+          credentials: 'include',
+        }),
+      ]);
+      if (!hskRes.ok) throw new Error('Failed to load decks');
+      const hskData: DeckStats[] = await hskRes.json();
+      setDecks(hskData);
+      if (savedRes.ok) {
+        const savedData: SavedDeckStats = await savedRes.json();
+        setSavedDeck(savedData);
+      }
     } catch {
       setDecksError('Could not load deck stats. Please try again.');
     } finally {
@@ -145,11 +165,14 @@ export default function Flashcards() {
 
   // ── Start study session ────────────────────────────────────────────────────
 
-  const startStudy = async (level: number) => {
+  const startStudy = async (level: StudyLevel) => {
     if (!accessToken) return;
     setStudyLoading(true);
     try {
-      const res = await fetch(`${API_URL}/api/srs/study/${level}`, {
+      const url = level === 'saved'
+        ? `${API_URL}/api/srs/study/saved`
+        : `${API_URL}/api/srs/study/${level}`;
+      const res = await fetch(url, {
         headers: { Authorization: `Bearer ${accessToken}` },
         credentials: 'include',
       });
@@ -180,11 +203,14 @@ export default function Flashcards() {
 
   // ── Start preview ─────────────────────────────────────────────────────────
 
-  const startPreview = async (level: number) => {
+  const startPreview = async (level: StudyLevel) => {
     if (!accessToken) return;
     setPreviewLoading(true);
     try {
-      const res = await fetch(`${API_URL}/api/srs/preview/${level}`, {
+      const url = level === 'saved'
+        ? `${API_URL}/api/srs/preview/saved`
+        : `${API_URL}/api/srs/preview/${level}`;
+      const res = await fetch(url, {
         headers: { Authorization: `Bearer ${accessToken}` },
         credentials: 'include',
       });
@@ -296,14 +322,15 @@ export default function Flashcards() {
 
   if (view === 'study' && cardFace === 'done') {
     const allCaughtUp = sessionTotal === 0;
+    const levelLabel = studyLevel === 'saved' ? 'Saved Words' : `HSK ${studyLevel}`;
     return (
       <div style={{ maxWidth: 480, margin: '40px auto', textAlign: 'center', padding: '0 16px' }}>
         <div style={{ fontSize: 56, marginBottom: 16 }}>{allCaughtUp ? '✅' : '🎉'}</div>
         <h2 style={{ marginBottom: 8 }}>{allCaughtUp ? 'All caught up!' : 'Session Complete!'}</h2>
         <p style={{ color: 'var(--muted-color)', marginBottom: 24 }}>
           {allCaughtUp
-            ? `No cards due for HSK ${studyLevel}. Come back tomorrow!`
-            : `HSK Level ${studyLevel}`}
+            ? `No cards due for ${levelLabel}. Come back tomorrow!`
+            : levelLabel}
         </p>
         {!allCaughtUp && (
         <div
@@ -338,7 +365,7 @@ export default function Flashcards() {
         <button
           onClick={backToDecks}
           style={{
-            backgroundColor: HSK_COLORS[studyLevel],
+            backgroundColor: studyLevel === 'saved' ? 'rgba(100, 108, 255, 0.8)' : HSK_COLORS[studyLevel as number],
             border: 'none',
             padding: '12px 28px',
             borderRadius: '8px',
@@ -359,7 +386,8 @@ export default function Flashcards() {
   if (view === 'study' && currentCard) {
     const displayPinyin = convertPinyinStyle(currentCard.pinyin, pinyinStyle);
     const progress = `${cardIndex + 1} / ${cards.length}`;
-    const levelColor = HSK_COLORS[studyLevel];
+    const levelColor = studyLevel === 'saved' ? 'rgba(100, 108, 255, 0.8)' : HSK_COLORS[studyLevel as number];
+    const levelLabel = studyLevel === 'saved' ? 'Saved Words' : `HSK ${studyLevel}`;
 
     return (
       <div style={{ maxWidth: 560, margin: '24px auto', padding: '0 16px' }}>
@@ -389,7 +417,7 @@ export default function Flashcards() {
             ← Decks
           </button>
           <span style={{ color: 'var(--muted-color)', fontSize: 13, textAlign: 'center', minWidth: 0 }}>
-            HSK {studyLevel} · {progress}
+            {levelLabel} · {progress}
           </span>
           <span
             style={{
@@ -554,7 +582,10 @@ export default function Flashcards() {
   // ── Preview ────────────────────────────────────────────────────────────────
 
   if (view === 'preview') {
-    const levelColor = HSK_COLORS[previewLevel];
+    const levelColor = previewLevel === 'saved' ? 'rgba(100, 108, 255, 0.8)' : HSK_COLORS[previewLevel as number];
+    const previewTitle = previewLevel === 'saved'
+      ? 'Saved Words'
+      : `HSK ${previewLevel} · ${HSK_LABELS[previewLevel as number]}`;
     return (
       <div style={{ maxWidth: 640, margin: '0 auto', padding: '0 16px' }}>
         {/* Header */}
@@ -577,7 +608,7 @@ export default function Flashcards() {
           </button>
           <div style={{ minWidth: 0 }}>
             <div style={{ fontWeight: 600, fontSize: 15, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-              HSK {previewLevel} · {HSK_LABELS[previewLevel]}
+              {previewTitle}
             </div>
             <div style={{ fontSize: 13, color: 'var(--muted-color)' }}>
               {previewCards.length} words
@@ -644,6 +675,8 @@ export default function Flashcards() {
 
   // ── Deck selection ─────────────────────────────────────────────────────────
 
+  const savedColor = 'rgba(100, 108, 255, 0.8)';
+
   return (
     <div style={{ maxWidth: 800, margin: '0 auto', padding: '0 16px' }}>
       <h2 style={{ marginBottom: 8 }}>HSK Flashcard Decks</h2>
@@ -670,6 +703,113 @@ export default function Flashcards() {
           Loading decks…
         </div>
       ) : (
+        <>
+        {/* Saved Words deck */}
+        {savedDeck && (
+          <div style={{ marginBottom: 16 }}>
+            <div
+              style={{
+                background: 'var(--bg-color, rgba(255,255,255,0.03))',
+                border: `1px solid ${savedColor}`,
+                borderRadius: 12,
+                padding: '16px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 10,
+              }}
+            >
+              {/* Header */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <div
+                  style={{
+                    width: 34,
+                    height: 34,
+                    borderRadius: 8,
+                    backgroundColor: savedColor,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: '#fff',
+                    fontWeight: 700,
+                    fontSize: 18,
+                    flexShrink: 0,
+                  }}
+                >
+                  ★
+                </div>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontWeight: 600, fontSize: 14 }}>Saved Words</div>
+                  <div style={{ fontSize: 12, color: 'var(--muted-color)' }}>
+                    Words saved from articles
+                  </div>
+                </div>
+              </div>
+
+              {/* Stats */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+                  <span style={{ color: 'var(--muted-color)' }}>Saved words</span>
+                  <span style={{ fontWeight: 500 }}>{savedDeck.totalWords}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+                  <span style={{ color: 'var(--muted-color)' }}>Due today</span>
+                  <span
+                    style={{
+                      fontWeight: 600,
+                      color: savedDeck.dueCards > 0 ? 'rgba(239, 68, 68, 0.9)' : 'inherit',
+                    }}
+                  >
+                    {savedDeck.dueCards}
+                  </span>
+                </div>
+              </div>
+
+              {/* Buttons */}
+              <div style={{ display: 'flex', gap: 8, marginTop: 2 }}>
+                <button
+                  onClick={() => startStudy('saved')}
+                  disabled={savedDeck.totalWords === 0 || studyLoading}
+                  style={{
+                    flex: 1,
+                    padding: '9px 6px',
+                    backgroundColor: savedDeck.totalWords > 0 ? savedColor : 'rgba(128, 128, 128, 0.3)',
+                    border: 'none',
+                    borderRadius: 8,
+                    cursor: savedDeck.totalWords > 0 && !studyLoading ? 'pointer' : 'not-allowed',
+                    color: savedDeck.totalWords > 0 ? '#fff' : 'var(--muted-color)',
+                    fontWeight: 600,
+                    fontSize: 13,
+                    opacity: studyLoading ? 0.7 : 1,
+                    whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                  }}
+                >
+                  {studyLoading ? 'Loading…' : savedDeck.dueCards > 0 ? `Study (${savedDeck.dueCards})` : 'Study'}
+                </button>
+                <button
+                  onClick={() => startPreview('saved')}
+                  disabled={savedDeck.totalWords === 0 || previewLoading}
+                  title="Browse saved words"
+                  style={{
+                    padding: '9px 12px',
+                    backgroundColor: 'transparent',
+                    border: `1px solid var(--border-color)`,
+                    borderRadius: 8,
+                    cursor: savedDeck.totalWords > 0 && !previewLoading ? 'pointer' : 'not-allowed',
+                    color: savedDeck.totalWords > 0 ? 'var(--text-color)' : 'var(--muted-color)',
+                    fontSize: 13,
+                    opacity: previewLoading ? 0.7 : 1,
+                    flexShrink: 0,
+                  }}
+                >
+                  Browse
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         <div
           style={{
             display: 'grid',
@@ -817,6 +957,7 @@ export default function Flashcards() {
             );
           })}
         </div>
+        </>
       )}
     </div>
   );
