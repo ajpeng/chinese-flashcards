@@ -2,7 +2,7 @@ import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { convertPinyinStyle } from '../utils/pinyin';
-import { convertChineseText } from '../utils/chinese-conversion';
+import { convertChineseText, toSimplified } from '../utils/chinese-conversion';
 
 const API_URL = import.meta.env.VITE_API_URL || 'https://api.ajpeng.ca';
 
@@ -42,8 +42,14 @@ function buildLookup(words: Word[]) {
   const map = new Map<string, Word>();
   let maxLen = 1;
   for (const w of words) {
-    if (!w.english) continue; // skip words with no definition
+    // Index under the stored form (may be traditional or simplified)
     map.set(w.simplified, w);
+    // Also index under the simplified form so traditional-stored words
+    // still match against simplified article content (and vice versa)
+    const simplifiedKey = toSimplified(w.simplified);
+    if (simplifiedKey !== w.simplified) {
+      map.set(simplifiedKey, w);
+    }
     maxLen = Math.max(maxLen, w.simplified.length);
   }
   return { map, maxLen };

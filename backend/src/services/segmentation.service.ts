@@ -7,6 +7,7 @@ import * as nodejieba from 'nodejieba';
 import { dictionaryService } from './dictionary.service';
 import { lookupService } from './lookup.service';
 import { SegmentedWord } from '../types/segmentation.types';
+import prisma from '../prisma/client';
 
 class SegmentationService {
   private isInitialized = false;
@@ -109,6 +110,37 @@ class SegmentationService {
               source: lookupResult.source,
             });
             externalLookupsUsed++;
+
+            // Persist as a shared cache row (articleId = null) so all future
+            // users benefit from this lookup without hitting the AI again.
+            try {
+              const existing = await prisma.word.findFirst({
+                where: { simplified: segment, articleId: null },
+                select: { id: true },
+              });
+              if (existing) {
+                await prisma.word.update({
+                  where: { id: existing.id },
+                  data: {
+                    ...(lookupResult.pinyin  ? { pinyin: lookupResult.pinyin }   : {}),
+                    ...(lookupResult.english ? { english: lookupResult.english } : {}),
+                    source: 'ai',
+                  },
+                });
+              } else {
+                await prisma.word.create({
+                  data: {
+                    simplified: segment,
+                    pinyin: lookupResult.pinyin ?? null,
+                    english: lookupResult.english ?? null,
+                    source: 'ai',
+                    articleId: null,
+                  },
+                });
+              }
+            } catch (err) {
+              console.error('[Segmentation] Failed to persist shared AI cache for:', segment, err);
+            }
           } else {
             analyzedSegments.push({ text: segment });
           }
