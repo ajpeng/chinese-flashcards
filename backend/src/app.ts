@@ -23,8 +23,6 @@ import { apiRateLimiter } from './middleware/rateLimit';
 
 const app: Application = express();
 app.set('trust proxy', 1);
-app.set('trust proxy', 1);
-app.set('trust proxy', 1);
 
 // Initialize services on startup
 (async () => {

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import BrowserSTT from '../components/BrowserSTT';
 
 interface STTResponse {
@@ -73,6 +73,11 @@ const exampleTexts = [
 ];
 
 export default function SpeechPractice(): React.ReactElement {
+  useEffect(() => {
+    document.title = 'Speech Practice · Chinese Flashcards';
+    return () => { document.title = 'Chinese Flashcards'; };
+  }, []);
+
   const [transcriptionResult, setTranscriptionResult] = useState<string>('');
   const [practiceText, setPracticeText] = useState<string>('你好，欢迎来到中文学习平台！今天我们要练习说中文。请大声朗读这些句子，然后检查你的发音是否准确。');
   const [isEditingText, setIsEditingText] = useState<boolean>(false);

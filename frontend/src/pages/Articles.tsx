@@ -611,6 +611,11 @@ export default function Articles(): React.ReactElement {
   const [error, setError] = useState<string | null>(null);
   const [openArticleId, setOpenArticleId] = useState<number | null>(null);
 
+  useEffect(() => {
+    document.title = 'Articles · Chinese Flashcards';
+    return () => { document.title = 'Chinese Flashcards'; };
+  }, []);
+
   // Drawer state
   const [drawerWord, setDrawerWord] = useState<DrawerWord | null>(null);
   // Cache for on-demand character lookups (simplified → LookedUpWord | null)

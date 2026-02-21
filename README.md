@@ -1,90 +1,140 @@
 # Chinese Flashcards
 
-HSK-graded Chinese reading application for language immersion. A full-stack web application featuring instant word segmentation, hover-lookup definitions, and flashcard management for HSK-level articles.
+An interactive Mandarin reading and vocabulary app with spaced repetition, text-to-speech, and speech recognition — built to help learners read real Chinese articles at their HSK level.
+
+**Live demo:** https://ajpeng.github.io/chinese-flashcards
+
+---
 
 ## Features
 
-- Browse HSK-graded Chinese articles (HSK 1-3)
-- Instant word definitions on hover
-- Add/remove words to personal flashcard collection
-- Responsive web interface built with React
-- RESTful API backend with PostgreSQL database
+### 📖 Interactive Article Reader
+- Chinese text segmented into clickable words using **nodejieba** (a Node.js binding for the Jieba NLP library)
+- Click any word to open a definition drawer with pinyin, HSK level, and English meaning
+- Pinyin displayed inline above characters (toggleable ruby annotation)
+- Simplified ↔ Traditional script toggle
+- TTS narration with **Azure Cognitive Services** — word-level timing highlights each word as it's spoken
+- Double-click any word to start reading from that position
+
+### 🗂️ Spaced Repetition Flashcards (SM-2)
+- Save words from articles directly to your personal deck
+- Implements the **SM-2 algorithm** for optimal review scheduling
+- HSK 1–6 decks with per-deck stats (total, studied, due today)
+- Keyboard shortcuts: any key to reveal, ← Hard / → Easy
+- Preview mode to browse all words in a deck
+
+### 🎙️ Speech Practice
+- Record yourself reading a passage using the **Web Speech API**
+- Character-level diff using **Wagner-Fischer LCS** algorithm highlights correct, wrong, and missed characters
+- Accuracy score computed per session
+
+### 🔐 Authentication
+- Patreon OAuth login — word progress and settings are synced per user
+- JWT access tokens with secure cookie-based refresh
+- Per-user settings: font size, speech rate, TTS voice, pinyin style, script variant
+
+---
+
+## Architecture
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  Frontend (React 19 + TypeScript, hosted on GitHub Pages)   │
+│                                                             │
+│  Articles.tsx   Flashcards.tsx   SpeechPractice.tsx         │
+│       │               │                  │                  │
+│       └───────────────┴──────────────────┘                  │
+│                       │ HTTPS                               │
+└───────────────────────┼─────────────────────────────────────┘
+                        │
+┌───────────────────────┼─────────────────────────────────────┐
+│  Backend (Express + TypeScript, VPS behind Nginx + SSL)     │
+│                                                             │
+│  /api/articles    → nodejieba segmentation + CC-CEDICT      │
+│  /api/srs         → SM-2 spaced repetition engine           │
+│  /api/tts         → Azure Cognitive Services TTS            │
+│  /api/stt         → Azure Speech-to-Text                    │
+│  /api/words       → On-demand dictionary lookup             │
+│  /api/auth        → Patreon OAuth + JWT                     │
+│                                                             │
+│  PostgreSQL (AWS RDS) via Prisma ORM                        │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### NLP Pipeline
+
+When an article is submitted, the backend:
+1. Segments the text with `nodejieba.cut()`
+2. Looks up each segment in **CC-CEDICT** (a 120k-entry Chinese–English dictionary)
+3. Cross-references against **HSK word lists** (levels 1–6) to assign difficulty
+4. Stores matched words in PostgreSQL linked to the article
+5. Unmatched characters are available for on-demand lookup via `/api/words/lookup`
+
+### Spaced Repetition
+
+Implements the [SM-2 algorithm](https://en.wikipedia.org/wiki/SuperMemo#SM-2_algorithm):
+- New cards enter with `interval=1`, `easeFactor=2.5`, `repetitions=0`
+- Quality score 5 (Easy) increases interval × easeFactor; quality 2 (Hard) resets interval
+- Due date computed from last review + interval
+
+---
 
 ## Tech Stack
 
-### Frontend
-- React 19 with TypeScript
-- Vite build tooling
-- SWC for fast compilation
-- ESLint for code quality
+| Layer | Technology |
+|---|---|
+| Frontend | React 19, TypeScript, Vite |
+| Backend | Node.js, Express, TypeScript |
+| Database | PostgreSQL (AWS RDS) via Prisma ORM |
+| NLP | nodejieba, CC-CEDICT, HSK word lists |
+| Speech | Azure Cognitive Services (TTS + STT) |
+| Auth | Patreon OAuth 2.0, JWT |
+| Infra | Nginx, GitHub Actions CI/CD |
 
-### Backend
-- Express.js with TypeScript
-- PostgreSQL database with Prisma ORM
-- SSL/TLS encrypted database connections
-- Raw SQL seeding for initial data
-- Health check and monitoring endpoints
+---
 
-### Infrastructure
-- Nginx reverse proxy with automatic SSL (Certbot)
-- Docker and Docker Compose for containerization
-- GitHub Actions CI/CD pipeline
-- AWS RDS for production database
-
-## Project Structure
-
-```
-.
-├── frontend/          # React frontend application
-├── backend/           # Express API server
-├── nginx/             # Nginx configuration files
-└── .github/           # CI/CD workflows
-```
-
-## Getting Started
+## Local Development
 
 ### Prerequisites
-- Node.js 18+ and npm
+- Node.js 18+
 - PostgreSQL 14+
-- Docker and Docker Compose (optional)
+- Azure Cognitive Services key (for TTS/STT)
+- Patreon OAuth app credentials (for auth)
 
-### Backend Setup
+### Backend
 
 ```bash
 cd backend
 npm install
-npm run prisma:migrate
-npm run prisma:seed
-npm run dev
+cp .env.example .env   # fill in DB_URL, AZURE_KEY, PATREON_CLIENT_*, JWT_SECRET
+npx prisma migrate dev
+npm run dev            # http://localhost:3000
 ```
 
-The backend will be available at `http://localhost:3000`
-
-### Frontend Setup
+### Frontend
 
 ```bash
 cd frontend
 npm install
-npm run dev
+# create frontend/.env with:
+# VITE_API_URL=http://localhost:3000
+npm run dev            # http://localhost:5173
 ```
 
-The frontend will be available at `http://localhost:5173`
+---
 
-## API Endpoints
+## API Reference
 
-- `GET /health` - Health check endpoint
-- `GET /test-db` - Database connectivity test
-- `GET /api/articles` - Fetch all articles with words
-- `POST /api/users/mock/flashcards` - Add word to flashcards
-- `DELETE /api/users/mock/flashcards` - Remove word from flashcards
-- `GET /api/users/mock/flashcards` - List all flashcards
-
-## Deployment
-
-The application is deployed with:
-- Automated SSL certificate provisioning via Certbot
-- Database migrations run automatically via GitHub Actions
-- Containerized backend deployment
-- Static frontend hosting
-
-See individual README files in `/frontend` and `/backend` for detailed setup and deployment instructions.
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/api/articles` | List all articles with segmented words |
+| `POST` | `/api/articles` | Submit article text for NLP processing |
+| `GET` | `/api/srs/decks` | Get SRS deck stats per HSK level |
+| `GET` | `/api/srs/study/:level` | Fetch due cards for a study session |
+| `POST` | `/api/srs/review` | Submit review result (SM-2 update) |
+| `GET` | `/api/srs/preview/:level` | Browse all words in a deck |
+| `GET` | `/api/words/lookup?q=字` | On-demand dictionary lookup |
+| `POST` | `/api/tts` | Synthesize speech with word timings |
+| `POST` | `/api/stt` | Transcribe audio to text |
+| `GET` | `/api/auth/patreon` | Initiate Patreon OAuth flow |
+| `GET` | `/health` | Health check |

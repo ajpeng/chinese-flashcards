@@ -3,6 +3,14 @@ import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { convertPinyinStyle } from '../utils/pinyin';
 
+// Set document title helper
+function usePageTitle(title: string) {
+  useEffect(() => {
+    document.title = `${title} · Chinese Flashcards`;
+    return () => { document.title = 'Chinese Flashcards'; };
+  }, [title]);
+}
+
 const API_URL = import.meta.env.VITE_API_URL || 'https://api.ajpeng.ca';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -81,6 +89,13 @@ export default function Flashcards() {
   const currentCard = cards[cardIndex] ?? null;
   const submittingRef = useRef(false);
 
+  // Dynamic page title
+  usePageTitle(
+    view === 'study' ? `Study HSK ${studyLevel}`
+    : view === 'preview' ? `Browse HSK ${previewLevel}`
+    : 'Flashcards'
+  );
+
   // ── Fetch deck stats ───────────────────────────────────────────────────────
 
   const fetchDecks = useCallback(async () => {
@@ -140,7 +155,15 @@ export default function Flashcards() {
       });
       if (!res.ok) throw new Error('Failed to load study cards');
       const data: StudyCard[] = await res.json();
-      if (data.length === 0) return; // nothing to study
+      if (data.length === 0) {
+        setStudyLevel(level);
+        setCards([]);
+        setCardFace('done');
+        setSessionCorrect(0);
+        setSessionTotal(0);
+        setView('study');
+        return;
+      }
       setCards(data);
       setCardIndex(0);
       setCardFace('front');
@@ -269,14 +292,20 @@ export default function Flashcards() {
     );
   }
 
-  // ── Study session: done ────────────────────────────────────────────────────
+  // ── Study session: done / all caught up ───────────────────────────────────
 
   if (view === 'study' && cardFace === 'done') {
+    const allCaughtUp = sessionTotal === 0;
     return (
       <div style={{ maxWidth: 480, margin: '40px auto', textAlign: 'center', padding: '0 16px' }}>
-        <div style={{ fontSize: 56, marginBottom: 16 }}>🎉</div>
-        <h2 style={{ marginBottom: 8 }}>Session Complete!</h2>
-        <p style={{ color: 'var(--muted-color)', marginBottom: 24 }}>HSK Level {studyLevel}</p>
+        <div style={{ fontSize: 56, marginBottom: 16 }}>{allCaughtUp ? '✅' : '🎉'}</div>
+        <h2 style={{ marginBottom: 8 }}>{allCaughtUp ? 'All caught up!' : 'Session Complete!'}</h2>
+        <p style={{ color: 'var(--muted-color)', marginBottom: 24 }}>
+          {allCaughtUp
+            ? `No cards due for HSK ${studyLevel}. Come back tomorrow!`
+            : `HSK Level ${studyLevel}`}
+        </p>
+        {!allCaughtUp && (
         <div
           style={{
             background: 'var(--bg-color, rgba(255,255,255,0.05))',
@@ -305,6 +334,7 @@ export default function Flashcards() {
             <div style={{ color: 'var(--muted-color)', fontSize: 13 }}>Again</div>
           </div>
         </div>
+        )}
         <button
           onClick={backToDecks}
           style={{
@@ -415,7 +445,7 @@ export default function Flashcards() {
             userSelect: 'none',
           }}
         >
-          {/* Chinese characters — click to pronounce (stopPropagation so card reveal isn't triggered on back) */}
+          {/* Chinese characters — click to pronounce */}
           <div
             onClick={(e) => { e.stopPropagation(); speak(currentCard.simplified); }}
             style={{ fontSize: 'clamp(48px, 15vw, 72px)', lineHeight: 1.1, fontWeight: 500, cursor: 'pointer' }}
@@ -424,9 +454,25 @@ export default function Flashcards() {
             {currentCard.simplified}
           </div>
 
-          {/* Pinyin */}
-          <div style={{ fontSize: 'clamp(16px, 5vw, 24px)', color: levelColor, fontStyle: 'italic' }}>
-            {displayPinyin}
+          {/* Pinyin + speaker icon */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontSize: 'clamp(16px, 5vw, 24px)', color: levelColor, fontStyle: 'italic' }}>
+              {displayPinyin}
+            </span>
+            <button
+              onClick={(e) => { e.stopPropagation(); speak(currentCard.simplified); }}
+              title="Listen"
+              style={{
+                background: 'none', border: 'none', cursor: 'pointer',
+                fontSize: 18, opacity: 0.5, padding: '2px 4px',
+                transition: 'opacity 0.15s',
+                flexShrink: 0,
+              }}
+              onMouseEnter={e => (e.currentTarget.style.opacity = '1')}
+              onMouseLeave={e => (e.currentTarget.style.opacity = '0.5')}
+            >
+              🔊
+            </button>
           </div>
 
           {/* English — only shown on back */}
