@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 
 export type SegmentedWord = {
@@ -21,9 +21,50 @@ export default function SegmentArticle({
   const [saving, setSaving] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
+  /** ID of the article being enriched in the background, if any */
+  const [enrichingArticleId, setEnrichingArticleId] = useState<number | null>(null);
+  /** Whether enrichment has finished (used to show a success banner) */
+  const [enrichingDone, setEnrichingDone] = useState<boolean>(false);
+
+  const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
   const API_URL = import.meta.env.VITE_API_URL || '';
   const { accessToken } = useAuth();
 
+  // ── Polling logic ───────────────────────────────────────────────────────────
+  useEffect(() => {
+    if (enrichingArticleId === null) return;
+
+    const stopPolling = () => {
+      if (pollIntervalRef.current !== null) {
+        clearInterval(pollIntervalRef.current);
+        pollIntervalRef.current = null;
+      }
+    };
+
+    const checkStatus = async () => {
+      try {
+        const res = await fetch(`${API_URL}/api/articles/${enrichingArticleId}/status`);
+        if (!res.ok) { stopPolling(); return; }
+        const data: { enriching: boolean } = await res.json();
+        if (!data.enriching) {
+          stopPolling();
+          setEnrichingArticleId(null);
+          setEnrichingDone(true);
+        }
+      } catch {
+        stopPolling();
+      }
+    };
+
+    pollIntervalRef.current = setInterval(checkStatus, 2000);
+    // Also fire once immediately
+    checkStatus();
+
+    return () => stopPolling();
+  }, [enrichingArticleId, API_URL]);
+
+  // ── Handlers ────────────────────────────────────────────────────────────────
   const handleAnalyze = async () => {
     if (!inputText.trim()) {
       setError('Please enter some Chinese text');
@@ -69,6 +110,7 @@ export default function SegmentArticle({
 
     setSaving(true);
     setError(null);
+    setEnrichingDone(false);
 
     try {
       const res = await fetch(`${API_URL}/api/articles`, {
@@ -90,14 +132,21 @@ export default function SegmentArticle({
         throw new Error(errorData.error || `HTTP ${res.status}`);
       }
 
-      alert('Article saved successfully!');
+      const data: { id: number; enriching?: boolean } = await res.json();
 
-      // Clear form and navigate back
+      // Clear the form
       setInputText('');
       setTitle('');
       setHskLevel(1);
       setSegmentedResults(null);
-      onNavigateBack();
+
+      if (data.enriching && data.id) {
+        // Background enrichment is running — start polling, stay on page briefly
+        setEnrichingArticleId(data.id);
+      } else {
+        // No enrichment needed — navigate back immediately
+        onNavigateBack();
+      }
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -111,15 +160,60 @@ export default function SegmentArticle({
     setHskLevel(1);
     setSegmentedResults(null);
     setError(null);
+    setEnrichingDone(false);
+    setEnrichingArticleId(null);
   };
 
+  // ── Render ──────────────────────────────────────────────────────────────────
   return (
     <div style={{ maxWidth: 960, padding: '0 4px' }}>
       <h2>New Article</h2>
       <p>Paste Chinese text below to analyze and optionally save as a new article.</p>
+
+      {/* Error banner */}
       {error && (
         <div style={{ color: 'crimson', marginBottom: 12, padding: 12, border: '1px solid crimson', borderRadius: 4 }}>
           <strong>Error:</strong> {error}
+        </div>
+      )}
+
+      {/* Enrichment in-progress banner */}
+      {enrichingArticleId !== null && (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 10,
+          marginBottom: 16, padding: '12px 16px',
+          background: 'rgba(59,130,246,0.08)', border: '1px solid rgba(59,130,246,0.3)',
+          borderRadius: 6, color: 'rgb(59,130,246)',
+        }}>
+          <span style={{ fontSize: 18 }}>⏳</span>
+          <span>
+            <strong>Article saved!</strong> Fetching AI definitions for unknown words in the background…
+          </span>
+        </div>
+      )}
+
+      {/* Enrichment done banner */}
+      {enrichingDone && (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 10,
+          marginBottom: 16, padding: '12px 16px',
+          background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.3)',
+          borderRadius: 6, color: 'rgb(16,185,129)',
+        }}>
+          <span style={{ fontSize: 18 }}>✅</span>
+          <span>
+            <strong>Definitions ready!</strong>{' '}
+            <button
+              onClick={onNavigateBack}
+              style={{
+                background: 'none', border: 'none', cursor: 'pointer',
+                color: 'inherit', fontWeight: 700, textDecoration: 'underline',
+                padding: 0, fontSize: 'inherit',
+              }}
+            >
+              Go to articles
+            </button>
+          </span>
         </div>
       )}
 
@@ -232,7 +326,7 @@ export default function SegmentArticle({
           </div>
 
           <div style={{ display: 'flex', gap: 8 }}>
-            <button onClick={handleSave} disabled={saving || !title.trim()}>
+            <button onClick={handleSave} disabled={saving || !title.trim() || enrichingArticleId !== null}>
               {saving ? 'Saving…' : 'Save Article'}
             </button>
             <button onClick={handleClear} disabled={saving}>

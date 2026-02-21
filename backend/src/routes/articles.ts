@@ -1,6 +1,7 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import prisma from '../prisma/client';
 import { segmentationService } from '../services/segmentation.service';
+import { enrichmentService } from '../services/enrichment.service';
 import { CreateArticleRequest, CreateArticleResponse } from '../types/segmentation.types';
 import { requireAuth, optionalAuth } from '../middleware/auth';
 import { articleCreationRateLimiter } from '../middleware/rateLimit';
@@ -24,7 +25,25 @@ router.get('/', optionalAuth, async (req: Request, res: Response, _next: NextFun
 });
 
 /**
+ * GET /api/articles/:id/status
+ * Returns whether background AI enrichment is still running for this article.
+ *
+ * Response: { enriching: boolean }
+ */
+router.get('/:id/status', async (req: Request, res: Response) => {
+  const id = parseInt(req.params.id, 10);
+  if (isNaN(id)) {
+    res.status(400).json({ error: 'Invalid article id' });
+    return;
+  }
+  res.json({ enriching: enrichmentService.isEnriching(id) });
+});
+
+/**
  * POST /api/articles - create a new article with automatic word segmentation
+ *
+ * Phase 1 (synchronous, fast): dictionary-only segmentation → create article + words → 201
+ * Phase 2 (async, background): AI lookup for words still missing definitions
  *
  * Request body:
  * {
@@ -33,7 +52,7 @@ router.get('/', optionalAuth, async (req: Request, res: Response, _next: NextFun
  *   "hskLevel": 1 (optional)
  * }
  *
- * Response: Created article with words
+ * Response: Created article with words + enriching flag
  */
 router.post(
   '/',
@@ -63,14 +82,12 @@ router.post(
       return;
     }
 
-    // Read AI lookup settings from environment
-    const enableAiLookup = process.env.ENABLE_AI_LOOKUP === 'true';
-    const maxLookups = parseInt(process.env.MAX_LOOKUPS_PER_ARTICLE || '10', 10);
-
+    // ── Phase 1: dictionary-only segmentation (fast, no AI) ──────────────────
+    // We deliberately skip AI here so the HTTP response is never blocked.
     const segments = await segmentationService.analyzeText(
       content,
-      enableAiLookup,
-      maxLookups
+      /* useExternalLookup */ false,
+      /* maxExternalLookups */ 0
     );
 
     const result = await prisma.$transaction(async (tx) => {
@@ -84,8 +101,11 @@ router.post(
       });
 
       const isChinese = (text: string) => /[\u4E00-\u9FFF]/.test(text);
+
+      // Include ALL Chinese segments (even those without a definition yet) so
+      // the background enrichment job can update them in place.
       const validSegments = segments.filter(
-        (seg) => seg.text.trim().length > 0 && isChinese(seg.text) && !!seg.english
+        (seg) => seg.text.trim().length > 0 && isChinese(seg.text)
       );
 
       if (validSegments.length > 0) {
@@ -114,11 +134,22 @@ router.post(
       return;
     }
 
-    const response: CreateArticleResponse = {
+    // ── Phase 2: fire-and-forget AI enrichment ────────────────────────────────
+    const enableAiLookup = process.env.ENABLE_AI_LOOKUP === 'true';
+    const maxLookups = parseInt(process.env.MAX_LOOKUPS_PER_ARTICLE || '10', 10);
+
+    const enriching = enableAiLookup && maxLookups > 0;
+    if (enriching) {
+      enrichmentService.enqueue(result.id, maxLookups);
+    }
+
+    // Respond immediately — don't wait for AI
+    const response: CreateArticleResponse & { enriching: boolean } = {
       id: result.id,
       title: result.title,
       content: result.content,
       hskLevel: result.hskLevel,
+      enriching,
       words: result.words.map((word) => ({
         id: word.id,
         simplified: word.simplified,
