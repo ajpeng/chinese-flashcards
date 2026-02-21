@@ -239,6 +239,20 @@ export default function Flashcards() {
     return () => window.removeEventListener('keydown', handleKey);
   }, [view, cardFace, submitReview]);
 
+  // ── TTS ───────────────────────────────────────────────────────────────────
+  const speak = async (text: string) => {
+    try {
+      const res = await fetch(`${API_URL}/api/tts`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text, voice: 'zh-CN-XiaoxiaoNeural', rate: '0.8' }),
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      new Audio(`data:audio/wav;base64,${data.audioData}`).play();
+    } catch { /* ignore TTS errors silently */ }
+  };
+
   const backToDecks = () => {
     setView('decks');
     setCards([]);
@@ -401,8 +415,12 @@ export default function Flashcards() {
             userSelect: 'none',
           }}
         >
-          {/* Chinese characters */}
-          <div style={{ fontSize: 'clamp(48px, 15vw, 72px)', lineHeight: 1.1, fontWeight: 500 }}>
+          {/* Chinese characters — click to pronounce (stopPropagation so card reveal isn't triggered on back) */}
+          <div
+            onClick={(e) => { e.stopPropagation(); speak(currentCard.simplified); }}
+            style={{ fontSize: 'clamp(48px, 15vw, 72px)', lineHeight: 1.1, fontWeight: 500, cursor: 'pointer' }}
+            title="Click to hear pronunciation"
+          >
             {currentCard.simplified}
           </div>
 
