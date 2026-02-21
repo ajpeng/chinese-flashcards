@@ -359,6 +359,96 @@ router.get(
   }
 );
 
+// DELETE /api/srs/saved/:wordId — remove a single word from the saved deck
+router.delete('/saved/:wordId', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const userId = req.user!.userId;
+    const wordId = parseInt(req.params.wordId, 10);
+    if (isNaN(wordId)) {
+      res.status(400).json({ error: 'Invalid wordId' });
+      return;
+    }
+
+    // Only delete if it's a flashcard for a word saved from an article
+    const card = await prisma.flashcard.findFirst({
+      where: { userId, wordId, word: { articleId: { not: null } } },
+      select: { id: true },
+    });
+
+    if (!card) {
+      res.status(404).json({ error: 'Saved word not found' });
+      return;
+    }
+
+    await prisma.flashcard.delete({ where: { id: card.id } });
+    res.json({ ok: true });
+  } catch (error) {
+    console.error('SRS delete saved word error:', error);
+    res.status(500).json({ error: 'Failed to remove word' });
+  }
+});
+
+// DELETE /api/srs/saved — clear all words from the saved deck
+router.delete('/saved', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const userId = req.user!.userId;
+
+    const result = await prisma.flashcard.deleteMany({
+      where: {
+        userId,
+        word: { articleId: { not: null } },
+      },
+    });
+
+    res.json({ ok: true, deleted: result.count });
+  } catch (error) {
+    console.error('SRS clear saved deck error:', error);
+    res.status(500).json({ error: 'Failed to clear saved deck' });
+  }
+});
+
+// PATCH /api/srs/saved/:wordId/interval — set next review interval (days)
+// Body: { days: number }  — e.g. 1 = due tomorrow, 0 = due now
+router.patch('/saved/:wordId/interval', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const userId = req.user!.userId;
+    const wordId = parseInt(req.params.wordId, 10);
+    const days = parseInt(req.body.days, 10);
+
+    if (isNaN(wordId)) {
+      res.status(400).json({ error: 'Invalid wordId' });
+      return;
+    }
+    if (isNaN(days) || days < 0) {
+      res.status(400).json({ error: '"days" must be a non-negative integer' });
+      return;
+    }
+
+    const card = await prisma.flashcard.findFirst({
+      where: { userId, wordId, word: { articleId: { not: null } } },
+      select: { id: true },
+    });
+
+    if (!card) {
+      res.status(404).json({ error: 'Saved word not found' });
+      return;
+    }
+
+    const nextReviewAt = new Date();
+    nextReviewAt.setDate(nextReviewAt.getDate() + days);
+
+    await prisma.flashcard.update({
+      where: { id: card.id },
+      data: { interval: days, nextReviewAt },
+    });
+
+    res.json({ ok: true, interval: days, nextReviewAt });
+  } catch (error) {
+    console.error('SRS reschedule error:', error);
+    res.status(500).json({ error: 'Failed to reschedule word' });
+  }
+});
+
 // POST /api/srs/review — submit a card review and update SM-2 scheduling
 router.post(
   '/review',

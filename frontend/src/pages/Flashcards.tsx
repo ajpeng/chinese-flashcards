@@ -28,6 +28,16 @@ type SavedDeckStats = {
   dueCards: number;
 };
 
+// Interval options for the saved-words frequency picker
+const INTERVAL_OPTIONS = [
+  { label: 'Due now',  days: 0 },
+  { label: '1 day',   days: 1 },
+  { label: '3 days',  days: 3 },
+  { label: '1 week',  days: 7 },
+  { label: '2 weeks', days: 14 },
+  { label: '1 month', days: 30 },
+];
+
 type StudyCard = {
   flashcardId: string | null;
   wordId: number;
@@ -93,6 +103,11 @@ export default function Flashcards() {
   const [previewLoading, setPreviewLoading] = useState(false);
   const [highlightedWord, setHighlightedWord] = useState<string | null>(null);
   const highlightedRowRef = useRef<HTMLDivElement | null>(null);
+
+  // Saved-deck management
+  const [clearingAll, setClearingAll] = useState(false);
+  const [deletingWordId, setDeletingWordId] = useState<number | null>(null);
+  const [reschedulingWordId, setReschedulingWordId] = useState<number | null>(null);
 
   const currentCard = cards[cardIndex] ?? null;
   const submittingRef = useRef(false);
@@ -306,6 +321,71 @@ export default function Flashcards() {
     setView('decks');
     setCards([]);
     fetchDecks(); // refresh due counts
+  };
+
+  // ── Saved-deck management ──────────────────────────────────────────────────
+
+  const deleteSavedWord = async (wordId: number) => {
+    if (!accessToken) return;
+    setDeletingWordId(wordId);
+    try {
+      await fetch(`${API_URL}/api/srs/saved/${wordId}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${accessToken}` },
+        credentials: 'include',
+      });
+      setPreviewCards(prev => prev.filter(c => c.wordId !== wordId));
+      fetchDecks();
+    } catch {
+      alert('Failed to remove word. Please try again.');
+    } finally {
+      setDeletingWordId(null);
+    }
+  };
+
+  const rescheduleSavedWord = async (wordId: number, days: number) => {
+    if (!accessToken) return;
+    setReschedulingWordId(wordId);
+    try {
+      await fetch(`${API_URL}/api/srs/saved/${wordId}/interval`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${accessToken}`,
+        },
+        credentials: 'include',
+        body: JSON.stringify({ days }),
+      });
+      setPreviewCards(prev => prev.map(c =>
+        c.wordId === wordId ? { ...c, interval: days } : c
+      ));
+      fetchDecks();
+    } catch {
+      alert('Failed to reschedule word. Please try again.');
+    } finally {
+      setReschedulingWordId(null);
+    }
+  };
+
+  const clearSavedDeck = async () => {
+    if (!accessToken) return;
+    if (!confirm('Remove all saved words from your flashcard deck? This cannot be undone.')) return;
+    setClearingAll(true);
+    try {
+      await fetch(`${API_URL}/api/srs/saved`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${accessToken}` },
+        credentials: 'include',
+      });
+      setSavedDeck(null);
+      setPreviewCards([]);
+      setView('decks');
+      fetchDecks();
+    } catch {
+      alert('Failed to clear saved deck. Please try again.');
+    } finally {
+      setClearingAll(false);
+    }
   };
 
   // ─── Render ─────────────────────────────────────────────────────────────────
@@ -586,6 +666,7 @@ export default function Flashcards() {
     const previewTitle = previewLevel === 'saved'
       ? 'Saved Words'
       : `HSK ${previewLevel} · ${HSK_LABELS[previewLevel as number]}`;
+    const isSavedPreview = previewLevel === 'saved';
     return (
       <div style={{ maxWidth: 640, margin: '0 auto', padding: '0 16px' }}>
         {/* Header */}
@@ -616,55 +697,118 @@ export default function Flashcards() {
           </div>
         </div>
 
+        {/* Saved-words hint */}
+        {isSavedPreview && previewCards.length > 0 && (
+          <div style={{ fontSize: 12, color: 'var(--muted-color)', marginBottom: 12 }}>
+            Use the interval picker to change how often each word is reviewed, or remove it with 🗑.
+          </div>
+        )}
+
         {/* Word list */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {previewCards.map(card => {
             const isHighlighted = card.simplified === highlightedWord;
+            const isDeleting = deletingWordId === card.wordId;
+            const isRescheduling = reschedulingWordId === card.wordId;
             return (
             <div
               key={card.wordId}
               ref={isHighlighted ? highlightedRowRef : null}
               style={{
-                display: 'grid',
-                gridTemplateColumns: 'auto 1fr auto',
-                alignItems: 'center',
-                gap: '0 10px',
                 background: isHighlighted ? 'rgba(100,108,255,0.1)' : 'var(--bg-color, rgba(255,255,255,0.03))',
                 border: isHighlighted ? '1px solid rgba(100,108,255,0.4)' : '1px solid var(--border-color)',
                 borderRadius: 10,
                 padding: '10px 12px',
                 transition: 'background 0.3s, border-color 0.3s',
+                opacity: isDeleting ? 0.4 : 1,
               }}
             >
-              {/* Chinese character */}
-              <span style={{ fontSize: 24, fontWeight: 500, color: levelColor, lineHeight: 1.2 }}>
-                {card.simplified}
-              </span>
+              {/* Top row: character · pinyin+english · badge */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr auto', alignItems: 'center', gap: '0 10px' }}>
+                {/* Chinese character */}
+                <span style={{ fontSize: 24, fontWeight: 500, color: levelColor, lineHeight: 1.2 }}>
+                  {card.simplified}
+                </span>
 
-              {/* Pinyin + English stacked */}
-              <div style={{ minWidth: 0 }}>
-                <div style={{ fontSize: 12, color: 'var(--muted-color)', fontStyle: 'italic' }}>
-                  {convertPinyinStyle(card.pinyin, pinyinStyle)}
+                {/* Pinyin + English stacked */}
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontSize: 12, color: 'var(--muted-color)', fontStyle: 'italic' }}>
+                    {convertPinyinStyle(card.pinyin, pinyinStyle)}
+                  </div>
+                  <div style={{ fontSize: 13, color: 'var(--text-color)', marginTop: 2 }}>
+                    {card.english || '—'}
+                  </div>
                 </div>
-                <div style={{ fontSize: 13, color: 'var(--text-color)', marginTop: 2 }}>
-                  {card.english || '—'}
-                </div>
+
+                {/* Badge */}
+                <span
+                  style={{
+                    fontSize: 11,
+                    padding: '2px 7px',
+                    borderRadius: 20,
+                    whiteSpace: 'nowrap',
+                    alignSelf: 'center',
+                    backgroundColor: card.isNew ? 'rgba(16, 185, 129, 0.15)' : 'rgba(59, 130, 246, 0.15)',
+                    color: card.isNew ? 'rgba(16, 185, 129, 1)' : 'rgba(59, 130, 246, 1)',
+                  }}
+                >
+                  {card.isNew ? 'New' : `${card.interval}d`}
+                </span>
               </div>
 
-              {/* Badge */}
-              <span
-                style={{
-                  fontSize: 11,
-                  padding: '2px 7px',
-                  borderRadius: 20,
-                  whiteSpace: 'nowrap',
-                  alignSelf: 'center',
-                  backgroundColor: card.isNew ? 'rgba(16, 185, 129, 0.15)' : 'rgba(59, 130, 246, 0.15)',
-                  color: card.isNew ? 'rgba(16, 185, 129, 1)' : 'rgba(59, 130, 246, 1)',
-                }}
-              >
-                {card.isNew ? 'New' : `${card.interval}d`}
-              </span>
+              {/* Bottom row (saved words only): interval picker + delete */}
+              {isSavedPreview && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8 }}>
+                  <label style={{ fontSize: 11, color: 'var(--muted-color)', whiteSpace: 'nowrap' }}>
+                    Review every
+                  </label>
+                  <select
+                    value={card.interval}
+                    disabled={isRescheduling || isDeleting}
+                    onChange={(e) => rescheduleSavedWord(card.wordId, Number(e.target.value))}
+                    style={{
+                      fontSize: 11,
+                      padding: '2px 4px',
+                      borderRadius: 4,
+                      border: '1px solid var(--border-color)',
+                      background: 'var(--bg-color, transparent)',
+                      color: 'var(--text-color)',
+                      cursor: isRescheduling || isDeleting ? 'not-allowed' : 'pointer',
+                      opacity: isRescheduling ? 0.5 : 1,
+                    }}
+                  >
+                    {INTERVAL_OPTIONS.map(opt => (
+                      <option key={opt.days} value={opt.days}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
+                  {isRescheduling && (
+                    <span style={{ fontSize: 11, color: 'var(--muted-color)' }}>Saving…</span>
+                  )}
+                  {/* Spacer */}
+                  <div style={{ flex: 1 }} />
+                  {/* Delete button */}
+                  <button
+                    onClick={() => deleteSavedWord(card.wordId)}
+                    disabled={isDeleting || isRescheduling}
+                    title="Remove from saved deck"
+                    style={{
+                      background: 'none',
+                      border: '1px solid rgba(239,68,68,0.3)',
+                      borderRadius: 5,
+                      padding: '2px 7px',
+                      cursor: isDeleting || isRescheduling ? 'not-allowed' : 'pointer',
+                      color: 'rgba(239,68,68,0.7)',
+                      fontSize: 12,
+                      opacity: isDeleting ? 0.4 : 1,
+                      transition: 'opacity 0.15s',
+                    }}
+                  >
+                    {isDeleting ? '…' : '🗑'}
+                  </button>
+                </div>
+              )}
             </div>
             );
           })}
@@ -737,12 +881,33 @@ export default function Flashcards() {
                 >
                   ★
                 </div>
-                <div style={{ minWidth: 0 }}>
+                <div style={{ minWidth: 0, flex: 1 }}>
                   <div style={{ fontWeight: 600, fontSize: 14 }}>Saved Words</div>
                   <div style={{ fontSize: 12, color: 'var(--muted-color)' }}>
                     Words saved from articles
                   </div>
                 </div>
+                {/* Clear all button */}
+                <button
+                  onClick={clearSavedDeck}
+                  disabled={clearingAll || savedDeck.totalWords === 0}
+                  title="Remove all saved words from this deck"
+                  style={{
+                    background: 'none',
+                    border: '1px solid rgba(239,68,68,0.4)',
+                    borderRadius: 6,
+                    padding: '4px 8px',
+                    cursor: clearingAll || savedDeck.totalWords === 0 ? 'not-allowed' : 'pointer',
+                    color: 'rgba(239,68,68,0.8)',
+                    fontSize: 11,
+                    fontWeight: 600,
+                    opacity: clearingAll || savedDeck.totalWords === 0 ? 0.4 : 1,
+                    whiteSpace: 'nowrap',
+                    flexShrink: 0,
+                  }}
+                >
+                  {clearingAll ? 'Clearing…' : 'Clear all'}
+                </button>
               </div>
 
               {/* Stats */}
