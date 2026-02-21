@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { convertPinyinStyle } from '../utils/pinyin';
 
@@ -553,14 +553,22 @@ export default function Flashcards() {
             userSelect: 'none',
           }}
         >
-          {/* Chinese characters — click to pronounce */}
-          <div
-            onClick={(e) => { e.stopPropagation(); speak(currentCard.simplified); }}
-            style={{ fontSize: 'clamp(48px, 15vw, 72px)', lineHeight: 1.1, fontWeight: 500, cursor: 'pointer' }}
-            title="Click to hear pronunciation"
+          {/* Chinese characters — click to open word detail page */}
+          <Link
+            to={`/words/${encodeURIComponent(currentCard.simplified)}`}
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              fontSize: 'clamp(48px, 15vw, 72px)',
+              lineHeight: 1.1,
+              fontWeight: 500,
+              color: 'inherit',
+              textDecoration: 'none',
+              cursor: 'pointer',
+            }}
+            title="Click to view word details"
           >
             {currentCard.simplified}
-          </div>
+          </Link>
 
           {/* Pinyin + speaker icon */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>

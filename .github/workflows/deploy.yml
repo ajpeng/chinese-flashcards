@@ -176,3 +176,7 @@ jobs:
           # Seed HSK words (idempotent — skips words that already exist)
           echo "🌱 Seeding HSK vocabulary..."
           docker exec chinese-backend npm run seed:hsk:prod
+
+          # Seed example sentences from Tatoeba/krmanik dataset (idempotent — skips if already loaded)
+          echo "📖 Seeding example sentences..."
+          docker exec chinese-backend npm run seed:examples:prod

@@ -6,6 +6,7 @@ import SegmentArticle from './pages/SegmentArticle'
 import SpeechPractice from './pages/SpeechPractice'
 import Settings from './pages/Settings'
 import Flashcards from './pages/Flashcards'
+import WordDetail from './pages/WordDetail'
 import { AuthProvider } from './contexts/AuthContext'
 import ProtectedRoute from './components/ProtectedRoute'
 import NavBar from './components/NavBar'
@@ -120,6 +121,7 @@ function Layout() {
               <Flashcards />
             </ProtectedRoute>
           } />
+          <Route path="/words/:word" element={<WordDetail />} />
           <Route path="/health" element={<Health />} />
         </Routes>
       </main>

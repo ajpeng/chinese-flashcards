@@ -87,4 +87,121 @@ router.get('/lookup', async (req: Request, res: Response) => {
   res.json({ pinyin: aiResult.pinyin, english: aiResult.english, hskLevel });
 });
 
+// GET /api/words/detail?q=学习
+// Returns rich word data for the word detail page:
+//   - pinyin, english, hskLevel for the word itself
+//   - related words: other HSK words that share any character with the queried word
+//   - example sentences: article sentences containing the word
+router.get('/detail', async (req: Request, res: Response) => {
+  const q = req.query.q as string;
+
+  if (!q || typeof q !== 'string' || q.trim().length === 0) {
+    res.status(400).json({ error: 'Missing query parameter "q"' });
+    return;
+  }
+
+  if (!dictionaryService.isReady()) {
+    res.status(503).json({ error: 'Dictionary service not ready' });
+    return;
+  }
+
+  const word = q.trim();
+
+  // ── 1. Base word info ──────────────────────────────────────────────────────
+  let pinyin: string | null = null;
+  let english: string | null = null;
+  let hskLevel: number | null = null;
+
+  const dictResult = dictionaryService.lookupWordWithLevel(word);
+  if (dictResult) {
+    pinyin = dictResult.pinyin ?? null;
+    english = dictResult.english ?? null;
+    hskLevel = dictResult.hskLevel ?? null;
+  } else {
+    // Fall back to DB cache
+    const cached = await lookupService.getCachedLookup(word);
+    if (cached) {
+      pinyin = cached.pinyin;
+      english = cached.english;
+      hskLevel = dictionaryService.getHskLevel?.(word) ?? null;
+    }
+  }
+
+  // ── 2. Related words ───────────────────────────────────────────────────────
+  // Find HSK words in the dictionary that share at least one character with
+  // the queried word, excluding the word itself. Limit to 20 results.
+  const chars = word.split('');
+  const relatedMap = new Map<string, { pinyin: string; english: string; hskLevel: number }>();
+
+  for (const char of chars) {
+    // Only look up single Han characters (avoid punctuation)
+    if (!/[\u4E00-\u9FFF]/.test(char)) continue;
+
+    // Ask the dictionary service for the raw dictionary object via lookupWord
+    // We iterate words that contain this char by checking the hsk level index.
+    // Since we don't have an inverted index, we use the hskLevels object which
+    // only holds real HSK vocabulary — much smaller than full CEDICT (5k vs 120k).
+    // We access the internal hskLevels via getHskLevel per candidate.
+    // Strategy: get all HSK words from DB (source='hsk') that contain the char.
+    const hskWords = await prisma.word.findMany({
+      where: {
+        simplified: { contains: char },
+        hskLevel: { not: null },
+        articleId: null,
+      },
+      select: { simplified: true, pinyin: true, english: true, hskLevel: true },
+      take: 60,
+    });
+
+    for (const w of hskWords) {
+      if (w.simplified === word) continue;
+      if (!w.pinyin || !w.english || !w.hskLevel) continue;
+      if (!relatedMap.has(w.simplified)) {
+        relatedMap.set(w.simplified, {
+          pinyin: w.pinyin,
+          english: w.english,
+          hskLevel: w.hskLevel,
+        });
+      }
+    }
+  }
+
+  // Also look up related words directly from cedict for the individual chars,
+  // using the dictionary service (fast, in-memory). Grab single-char compounds.
+  for (const char of chars) {
+    if (!/[\u4E00-\u9FFF]/.test(char)) continue;
+    const charEntry = dictionaryService.lookupWord(char);
+    const charHsk = dictionaryService.getHskLevel?.(char);
+    if (charEntry && charHsk && char !== word && !relatedMap.has(char)) {
+      relatedMap.set(char, {
+        pinyin: charEntry.pinyin,
+        english: charEntry.english,
+        hskLevel: charHsk,
+      });
+    }
+  }
+
+  const related = Array.from(relatedMap.entries())
+    .map(([simplified, data]) => ({ simplified, ...data }))
+    .sort((a, b) => a.hskLevel - b.hskLevel)
+    .slice(0, 20);
+
+  // ── 3. Example sentences ───────────────────────────────────────────────────
+  // Query the ExampleSentence table (sourced from krmanik/Chinese-Example-Sentences
+  // which is derived from Tatoeba, CC BY 2.0 FR).
+  const exampleRows = await prisma.exampleSentence.findMany({
+    where: { simplified: { contains: word } },
+    select: { simplified: true, pinyin: true, english: true },
+    take: 5,
+  });
+
+  const sentences = exampleRows.map(r => ({
+    sentence: r.simplified,
+    pinyin: r.pinyin,
+    english: r.english,
+  }));
+
+  res.json({ word, pinyin, english, hskLevel, related, sentences });
+});
+
 export default router;

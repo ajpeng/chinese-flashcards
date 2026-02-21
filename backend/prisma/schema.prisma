@@ -80,6 +80,16 @@ model Flashcard {
   @@index([userId, nextReviewAt])
 }
 
+model ExampleSentence {
+  id          Int    @id
+  simplified  String
+  traditional String
+  pinyin      String
+  english     String
+
+  @@index([simplified])
+}
+
 model TTSCache {
   id            String   @id @default(cuid())
   textHash      String   @unique // SHA-256 hash of text+voice+rate combination

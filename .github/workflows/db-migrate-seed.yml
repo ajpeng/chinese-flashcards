@@ -50,7 +50,7 @@ jobs:
             docker run --rm \
               -e DATABASE_URL="${DATABASE_URL}" \
               426719348382.dkr.ecr.us-east-1.amazonaws.com/chinese-backend:latest \
-              sh -c "npx prisma migrate deploy --schema ./prisma/schema.prisma && npx prisma db seed --schema ./prisma/schema.prisma && node dist/scripts/seed-hsk-words.js"
+              sh -c "npx prisma migrate deploy --schema ./prisma/schema.prisma && npx prisma db seed --schema ./prisma/schema.prisma && node dist/scripts/seed-hsk-words.js && node dist/scripts/seed-example-sentences.js"
 
       - name: Debug database connection
         uses: appleboy/ssh-action@v1.0.3
