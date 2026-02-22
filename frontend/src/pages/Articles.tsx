@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { convertPinyinStyle } from '../utils/pinyin';
 import { convertChineseText, toSimplified } from '../utils/chinese-conversion';
@@ -430,6 +430,24 @@ function WordDrawer({
                   View in Flashcards →
                 </button>
               )}
+
+              {/* Word detail page link — always shown */}
+              <Link
+                to={`/words/${encodeURIComponent(word.simplified)}`}
+                style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                  width: '100%', padding: '10px 0', borderRadius: 8,
+                  border: '1px solid var(--border-color)',
+                  background: 'transparent',
+                  color: 'var(--muted-color)',
+                  fontSize: 13, fontWeight: 600,
+                  textDecoration: 'none',
+                  transition: 'background 0.15s',
+                  boxSizing: 'border-box',
+                }}
+              >
+                Stroke order &amp; examples →
+              </Link>
             </div>
           </div>
         )}
