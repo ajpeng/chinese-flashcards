@@ -1,7 +1,11 @@
 import { Router, Request, Response } from 'express';
+import { Pool } from 'pg';
 import { dictionaryService } from '../services/dictionary.service';
 import { lookupService } from '../services/lookup.service';
 import prisma from '../prisma/client';
+
+// Raw pg pool for queries unsupported by Prisma's driver-adapter $queryRaw
+const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
 const router = Router();
 
@@ -187,13 +191,18 @@ router.get('/detail', async (req: Request, res: Response) => {
     .slice(0, 20);
 
   // ── 3. Example sentences ───────────────────────────────────────────────────
-  // Query the ExampleSentence table (sourced from krmanik/Chinese-Example-Sentences
-  // which is derived from Tatoeba, CC BY 2.0 FR).
-  const exampleRows = await prisma.exampleSentence.findMany({
-    where: { simplified: { contains: word } },
-    select: { simplified: true, pinyin: true, english: true },
-    take: 5,
-  });
+  // Use the raw pg pool with a parameterised LIKE query backed by the pg_trgm
+  // GIN index. We search both the simplified and traditional columns so that
+  // querying with a traditional character (e.g. 奧 U+5967) still matches
+  // sentences stored in simplified form (奥 U+5965).
+  const { rows: exampleRows } = await pool.query<{
+    simplified: string; pinyin: string; english: string;
+  }>(
+    `SELECT simplified, pinyin, english FROM "ExampleSentence"
+     WHERE simplified LIKE $1 OR traditional LIKE $1
+     LIMIT 5`,
+    [`%${word}%`]
+  );
 
   const sentences = exampleRows.map(r => ({
     sentence: r.simplified,
