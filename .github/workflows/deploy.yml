@@ -168,15 +168,3 @@ jobs:
           # Run database migrations
           echo "🗄️ Running migrations..."
           docker exec chinese-backend ./node_modules/.bin/prisma migrate deploy
-
-          # Remove duplicate HSK words (keep only lowest-level copy of each word)
-          echo "🔁 Deduplicating HSK words across levels..."
-          docker exec chinese-backend npm run dedup:hsk:prod
-
-          # Seed HSK words (idempotent — skips words that already exist)
-          echo "🌱 Seeding HSK vocabulary..."
-          docker exec chinese-backend npm run seed:hsk:prod
-
-          # Seed example sentences from Tatoeba/krmanik dataset (idempotent — skips if already loaded)
-          echo "📖 Seeding example sentences..."
-          docker exec chinese-backend npm run seed:examples:prod
