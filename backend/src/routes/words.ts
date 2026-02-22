@@ -4,8 +4,13 @@ import { dictionaryService } from '../services/dictionary.service';
 import { lookupService } from '../services/lookup.service';
 import prisma from '../prisma/client';
 
-// Raw pg pool for queries unsupported by Prisma's driver-adapter $queryRaw
-const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+// Raw pg pool for queries unsupported by Prisma's driver-adapter $queryRaw.
+// ssl: rejectUnauthorized: false is required for AWS RDS which uses SSL but
+// presents a self-signed cert that pg rejects by default without this flag.
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
+});
 
 const router = Router();
 
