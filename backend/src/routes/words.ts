@@ -1,15 +1,28 @@
 import { Router, Request, Response } from 'express';
+import * as fs from 'fs';
+import * as path from 'path';
 import { Pool } from 'pg';
 import { dictionaryService } from '../services/dictionary.service';
 import { lookupService } from '../services/lookup.service';
 import prisma from '../prisma/client';
 
 // Raw pg pool for queries unsupported by Prisma's driver-adapter $queryRaw.
-// ssl: rejectUnauthorized: false is required for AWS RDS which uses SSL but
-// presents a self-signed cert that pg rejects by default without this flag.
+// In production we verify the RDS server cert against the AWS CA bundle that
+// is bundled into the Docker image, rather than skipping verification entirely.
+function buildSslConfig() {
+  if (process.env.NODE_ENV !== 'production') return false;
+  const caPath = path.join(process.cwd(), 'rds-ca-bundle.pem');
+  if (fs.existsSync(caPath)) {
+    return { ca: fs.readFileSync(caPath).toString() };
+  }
+  // Fallback: still encrypt but skip cert verification (better than plaintext)
+  console.warn('[pool] rds-ca-bundle.pem not found, falling back to rejectUnauthorized:false');
+  return { rejectUnauthorized: false };
+}
+
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
+  ssl: buildSslConfig(),
 });
 
 const router = Router();

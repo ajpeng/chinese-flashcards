@@ -26,7 +26,11 @@ WORKDIR /app
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/views ./views
-COPY --from=builder /app/src/data ./dist/data
+# Only copy runtime-required data files — not cedict.txt (9.4MB raw source),
+# example-sentences.tsv (9.8MB, already in DB), hsk CSVs, or sample files.
+RUN mkdir -p ./dist/data
+COPY --from=builder /app/src/data/cedict.json ./dist/data/
+COPY --from=builder /app/src/data/hsk-words.json ./dist/data/
 COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/prisma.config.ts ./
 COPY --from=builder /app/rds-ca-bundle.pem ./
