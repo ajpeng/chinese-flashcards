@@ -733,10 +733,14 @@ export default function Flashcards() {
             >
               {/* Top row: character · pinyin+english · badge */}
               <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr auto', alignItems: 'center', gap: '0 10px' }}>
-                {/* Chinese character */}
-                <span style={{ fontSize: 24, fontWeight: 500, color: levelColor, lineHeight: 1.2 }}>
+                {/* Chinese character — links to word detail page */}
+                <Link
+                  to={`/words/${encodeURIComponent(card.simplified)}`}
+                  style={{ fontSize: 24, fontWeight: 500, color: levelColor, lineHeight: 1.2, textDecoration: 'none' }}
+                  title="View stroke order & examples"
+                >
                   {card.simplified}
-                </span>
+                </Link>
 
                 {/* Pinyin + English stacked */}
                 <div style={{ minWidth: 0 }}>
