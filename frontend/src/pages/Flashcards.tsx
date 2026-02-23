@@ -110,8 +110,14 @@ export default function Flashcards() {
   const [reschedulingWordId, setReschedulingWordId] = useState<number | null>(null);
 
   // Add custom card modal
+  const MAX_CUSTOM_CHARS = 6;
   const [showAddModal, setShowAddModal] = useState(false);
-  const [addForm, setAddForm] = useState({ simplified: '', pinyin: '', english: '' });
+  const [addInput, setAddInput] = useState('');           // step 1: what the user types
+  const [addLooking, setAddLooking] = useState(false);    // step 1: lookup in progress
+  const [addLookupError, setAddLookupError] = useState<string | null>(null);
+  const [addPreview, setAddPreview] = useState<{         // step 2: lookup result
+    simplified: string; pinyin: string; english: string; hskLevel: number | null;
+  } | null>(null);
   const [addSubmitting, setAddSubmitting] = useState(false);
   const [addError, setAddError] = useState<string | null>(null);
 
@@ -394,14 +400,37 @@ export default function Flashcards() {
     }
   };
 
-  const handleAddCard = async (e: React.FormEvent) => {
+  const openAddModal = () => {
+    setAddInput('');
+    setAddPreview(null);
+    setAddLookupError(null);
+    setAddError(null);
+    setShowAddModal(true);
+  };
+
+  const handleLookup = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!accessToken) return;
-    const { simplified, pinyin, english } = addForm;
-    if (!simplified.trim() || !pinyin.trim() || !english.trim()) {
-      setAddError('All fields are required.');
-      return;
+    const word = addInput.trim();
+    if (!word) return;
+    setAddLooking(true);
+    setAddLookupError(null);
+    setAddPreview(null);
+    try {
+      const res = await fetch(`${API_URL}/api/words/lookup?q=${encodeURIComponent(word)}`);
+      if (res.status === 404) { setAddLookupError('Word not found in the dictionary.'); return; }
+      if (!res.ok) { setAddLookupError('Lookup failed. Please try again.'); return; }
+      const data = await res.json();
+      if (!data.pinyin || !data.english) { setAddLookupError('No definition found for this word.'); return; }
+      setAddPreview({ simplified: word, pinyin: data.pinyin, english: data.english, hskLevel: data.hskLevel ?? null });
+    } catch {
+      setAddLookupError('Lookup failed. Please try again.');
+    } finally {
+      setAddLooking(false);
     }
+  };
+
+  const handleConfirmAdd = async () => {
+    if (!accessToken || !addPreview) return;
     setAddSubmitting(true);
     setAddError(null);
     try {
@@ -409,12 +438,11 @@ export default function Flashcards() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
         credentials: 'include',
-        body: JSON.stringify({ simplified: simplified.trim(), pinyin: pinyin.trim(), english: english.trim() }),
+        body: JSON.stringify({ simplified: addPreview.simplified, pinyin: addPreview.pinyin, english: addPreview.english }),
       });
       if (res.status === 409) { setAddError('You already have a card for this word.'); return; }
       if (!res.ok) { setAddError('Failed to create card. Please try again.'); return; }
       setShowAddModal(false);
-      setAddForm({ simplified: '', pinyin: '', english: '' });
       fetchDecks();
     } catch {
       setAddError('Failed to create card. Please try again.');
@@ -936,7 +964,7 @@ export default function Flashcards() {
                 </div>
                 {/* Add card button */}
                 <button
-                  onClick={() => { setAddForm({ simplified: '', pinyin: '', english: '' }); setAddError(null); setShowAddModal(true); }}
+                  onClick={openAddModal}
                   title="Create a custom flashcard"
                   style={{
                     background: 'none',
@@ -1196,93 +1224,107 @@ export default function Flashcards() {
         <>
           {/* Backdrop */}
           <div
-            onClick={() => !addSubmitting && setShowAddModal(false)}
-            style={{
-              position: 'fixed', inset: 0, zIndex: 400,
-              background: 'rgba(0,0,0,0.5)',
-              backdropFilter: 'blur(2px)',
-            }}
+            onClick={() => !addLooking && !addSubmitting && setShowAddModal(false)}
+            style={{ position: 'fixed', inset: 0, zIndex: 400, background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(2px)' }}
           />
           {/* Modal */}
           <div style={{
-            position: 'fixed',
-            top: '50%', left: '50%',
-            transform: 'translate(-50%, -50%)',
-            zIndex: 401,
-            width: 'min(420px, calc(100vw - 32px))',
-            background: 'var(--card-bg)',
-            border: '1px solid var(--border-color)',
-            borderRadius: 16,
-            padding: '24px',
+            position: 'fixed', top: '50%', left: '50%',
+            transform: 'translate(-50%, -50%)', zIndex: 401,
+            width: 'min(400px, calc(100vw - 32px))',
+            background: 'var(--card-bg)', border: '1px solid var(--border-color)',
+            borderRadius: 16, padding: '24px',
             boxShadow: '0 24px 64px rgba(0,0,0,0.4)',
           }}>
+            {/* Header */}
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
-              <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>Add Custom Card</h3>
+              <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>Add Card</h3>
               <button
                 onClick={() => setShowAddModal(false)}
-                disabled={addSubmitting}
+                disabled={addLooking || addSubmitting}
                 style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 20, color: 'var(--muted-color)', lineHeight: 1, padding: '0 2px' }}
               >×</button>
             </div>
 
-            <form onSubmit={handleAddCard} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-              {/* Chinese */}
+            {/* Step 1 — Chinese input */}
+            <form onSubmit={handleLookup} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               <div>
                 <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--muted-color)', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: 6 }}>
-                  Chinese
+                  Chinese word or phrase
                 </label>
-                <input
-                  value={addForm.simplified}
-                  onChange={e => setAddForm(f => ({ ...f, simplified: e.target.value }))}
-                  placeholder="e.g. 学习"
-                  autoFocus
-                  style={{
-                    width: '100%', padding: '9px 12px', borderRadius: 8,
-                    border: '1px solid var(--border-color)',
-                    background: 'var(--bg-secondary, rgba(128,128,128,0.08))',
-                    color: 'var(--text-color)', fontSize: 18,
-                    boxSizing: 'border-box', outline: 'none',
-                  }}
-                />
+                <div style={{ position: 'relative' }}>
+                  <input
+                    value={addInput}
+                    onChange={e => {
+                      // Strip non-CJK characters and enforce max length
+                      const val = e.target.value.replace(/[^\u4E00-\u9FFF\u3400-\u4DBF]/g, '').slice(0, MAX_CUSTOM_CHARS);
+                      setAddInput(val);
+                      setAddPreview(null);
+                      setAddLookupError(null);
+                    }}
+                    placeholder="e.g. 学习"
+                    autoFocus
+                    maxLength={MAX_CUSTOM_CHARS}
+                    style={{
+                      width: '100%', padding: '10px 48px 10px 12px', borderRadius: 8,
+                      border: `1px solid ${addLookupError ? 'rgba(239,68,68,0.6)' : 'var(--border-color)'}`,
+                      background: 'var(--bg-secondary, rgba(128,128,128,0.08))',
+                      color: 'var(--text-color)', fontSize: 22,
+                      boxSizing: 'border-box', outline: 'none',
+                      letterSpacing: 2,
+                    }}
+                  />
+                  {/* Character counter */}
+                  <span style={{
+                    position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)',
+                    fontSize: 11, color: addInput.length >= MAX_CUSTOM_CHARS ? 'rgba(239,68,68,0.8)' : 'var(--muted-color)',
+                    fontVariantNumeric: 'tabular-nums',
+                  }}>
+                    {addInput.length}/{MAX_CUSTOM_CHARS}
+                  </span>
+                </div>
+                <p style={{ fontSize: 11, color: 'var(--muted-color)', margin: '5px 0 0', lineHeight: 1.4 }}>
+                  Chinese characters only · max {MAX_CUSTOM_CHARS} · pinyin &amp; definition auto-filled
+                </p>
               </div>
 
-              {/* Pinyin */}
-              <div>
-                <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--muted-color)', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: 6 }}>
-                  Pinyin
-                </label>
-                <input
-                  value={addForm.pinyin}
-                  onChange={e => setAddForm(f => ({ ...f, pinyin: e.target.value }))}
-                  placeholder="e.g. xué xí"
-                  style={{
-                    width: '100%', padding: '9px 12px', borderRadius: 8,
-                    border: '1px solid var(--border-color)',
-                    background: 'var(--bg-secondary, rgba(128,128,128,0.08))',
-                    color: 'var(--text-color)', fontSize: 15,
-                    boxSizing: 'border-box', outline: 'none',
-                  }}
-                />
-              </div>
+              {addLookupError && (
+                <div style={{ fontSize: 13, color: 'rgba(239,68,68,0.9)', padding: '8px 12px', background: 'rgba(239,68,68,0.08)', borderRadius: 8 }}>
+                  {addLookupError}
+                </div>
+              )}
 
-              {/* English */}
-              <div>
-                <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--muted-color)', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: 6 }}>
-                  English
-                </label>
-                <input
-                  value={addForm.english}
-                  onChange={e => setAddForm(f => ({ ...f, english: e.target.value }))}
-                  placeholder="e.g. to study; to learn"
-                  style={{
-                    width: '100%', padding: '9px 12px', borderRadius: 8,
-                    border: '1px solid var(--border-color)',
-                    background: 'var(--bg-secondary, rgba(128,128,128,0.08))',
-                    color: 'var(--text-color)', fontSize: 15,
-                    boxSizing: 'border-box', outline: 'none',
-                  }}
-                />
-              </div>
+              {/* Step 2 — Preview card */}
+              {addPreview && (
+                <div style={{
+                  border: `1px solid ${savedColor}`,
+                  borderRadius: 12, padding: '16px',
+                  background: 'rgba(100,108,255,0.06)',
+                  display: 'flex', flexDirection: 'column', gap: 6,
+                }}>
+                  <div style={{ fontSize: 11, fontWeight: 600, color: savedColor, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>
+                    Preview
+                  </div>
+                  <div style={{ fontSize: 36, fontWeight: 500, lineHeight: 1.1, color: savedColor }}>
+                    {addPreview.simplified}
+                  </div>
+                  <div style={{ fontSize: 14, color: savedColor, fontStyle: 'italic', opacity: 0.85 }}>
+                    {convertPinyinStyle(addPreview.pinyin, pinyinStyle)}
+                  </div>
+                  <div style={{ fontSize: 13, color: 'var(--text-color)', lineHeight: 1.5 }}>
+                    {addPreview.english}
+                  </div>
+                  {addPreview.hskLevel && (
+                    <span style={{
+                      alignSelf: 'flex-start', fontSize: 11, padding: '2px 8px',
+                      borderRadius: 20, fontWeight: 600,
+                      background: 'rgba(100,108,255,0.15)', color: savedColor,
+                    }}>
+                      HSK {addPreview.hskLevel}
+                    </span>
+                  )}
+                </div>
+              )}
 
               {addError && (
                 <div style={{ fontSize: 13, color: 'rgba(239,68,68,0.9)', padding: '8px 12px', background: 'rgba(239,68,68,0.08)', borderRadius: 8 }}>
@@ -1294,7 +1336,7 @@ export default function Flashcards() {
                 <button
                   type="button"
                   onClick={() => setShowAddModal(false)}
-                  disabled={addSubmitting}
+                  disabled={addLooking || addSubmitting}
                   style={{
                     flex: 1, padding: '10px 0', borderRadius: 8,
                     border: '1px solid var(--border-color)',
@@ -1304,20 +1346,36 @@ export default function Flashcards() {
                 >
                   Cancel
                 </button>
-                <button
-                  type="submit"
-                  disabled={addSubmitting}
-                  style={{
-                    flex: 1, padding: '10px 0', borderRadius: 8,
-                    border: 'none',
-                    background: addSubmitting ? 'rgba(100,108,255,0.5)' : savedColor,
-                    color: '#fff',
-                    fontSize: 14, fontWeight: 600,
-                    cursor: addSubmitting ? 'not-allowed' : 'pointer',
-                  }}
-                >
-                  {addSubmitting ? 'Adding…' : 'Add Card'}
-                </button>
+
+                {/* Show "Look up" until we have a preview, then "Add to deck" */}
+                {!addPreview ? (
+                  <button
+                    type="submit"
+                    disabled={addInput.length === 0 || addLooking}
+                    style={{
+                      flex: 1, padding: '10px 0', borderRadius: 8, border: 'none',
+                      background: addInput.length === 0 || addLooking ? 'rgba(100,108,255,0.4)' : savedColor,
+                      color: '#fff', fontSize: 14, fontWeight: 600,
+                      cursor: addInput.length === 0 || addLooking ? 'not-allowed' : 'pointer',
+                    }}
+                  >
+                    {addLooking ? 'Looking up…' : 'Look up'}
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={handleConfirmAdd}
+                    disabled={addSubmitting}
+                    style={{
+                      flex: 1, padding: '10px 0', borderRadius: 8, border: 'none',
+                      background: addSubmitting ? 'rgba(100,108,255,0.4)' : savedColor,
+                      color: '#fff', fontSize: 14, fontWeight: 600,
+                      cursor: addSubmitting ? 'not-allowed' : 'pointer',
+                    }}
+                  >
+                    {addSubmitting ? 'Adding…' : 'Add to deck'}
+                  </button>
+                )}
               </div>
             </form>
           </div>
