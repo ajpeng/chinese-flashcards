@@ -92,10 +92,15 @@ jobs:
 
     - name: Deploy to EC2
       uses: appleboy/ssh-action@v1.0.3
+      env:
+        AWS_ACCESS_KEY_ID: ${{ env.AWS_ACCESS_KEY_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ env.AWS_SECRET_ACCESS_KEY }}
+        AWS_SESSION_TOKEN: ${{ env.AWS_SESSION_TOKEN }}
       with:
         host: ${{ secrets.EC2_HOST }}
         username: ubuntu
         key: ${{ secrets.EC2_SSH_KEY }}
+        envs: AWS_ACCESS_KEY_ID,AWS_SECRET_ACCESS_KEY,AWS_SESSION_TOKEN
         script: |
           # ── Disk cleanup FIRST (runs before anything else) ──────────────────
           echo "💾 Disk usage before cleanup:"
@@ -142,6 +147,9 @@ jobs:
           # Start/reload nginx
           sudo systemctl enable nginx
           sudo systemctl start nginx || sudo systemctl reload nginx
+
+          # Log into ECR on EC2 so docker pull is authorised
+          aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 426719348382.dkr.ecr.us-east-1.amazonaws.com
 
           # Deploy backend container
           docker pull 426719348382.dkr.ecr.us-east-1.amazonaws.com/chinese-backend:latest
