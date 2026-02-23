@@ -412,6 +412,14 @@ export default function Flashcards() {
     e.preventDefault();
     const word = addInput.trim();
     if (!word) return;
+    if (word.length > MAX_CUSTOM_CHARS) {
+      setAddLookupError(`Please enter at most ${MAX_CUSTOM_CHARS} characters.`);
+      return;
+    }
+    if (!/^[\u4E00-\u9FFF\u3400-\u4DBF]+$/.test(word)) {
+      setAddLookupError('Please enter Chinese characters only.');
+      return;
+    }
     setAddLooking(true);
     setAddLookupError(null);
     setAddPreview(null);
@@ -1256,15 +1264,12 @@ export default function Flashcards() {
                   <input
                     value={addInput}
                     onChange={e => {
-                      // Strip non-CJK characters and enforce max length
-                      const val = e.target.value.replace(/[^\u4E00-\u9FFF\u3400-\u4DBF]/g, '').slice(0, MAX_CUSTOM_CHARS);
-                      setAddInput(val);
+                      setAddInput(e.target.value);
                       setAddPreview(null);
                       setAddLookupError(null);
                     }}
                     placeholder="e.g. 学习"
                     autoFocus
-                    maxLength={MAX_CUSTOM_CHARS}
                     style={{
                       width: '100%', padding: '10px 48px 10px 12px', borderRadius: 8,
                       border: `1px solid ${addLookupError ? 'rgba(239,68,68,0.6)' : 'var(--border-color)'}`,
@@ -1274,17 +1279,17 @@ export default function Flashcards() {
                       letterSpacing: 2,
                     }}
                   />
-                  {/* Character counter */}
+                  {/* Character counter — based on trimmed value */}
                   <span style={{
                     position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)',
-                    fontSize: 11, color: addInput.length >= MAX_CUSTOM_CHARS ? 'rgba(239,68,68,0.8)' : 'var(--muted-color)',
+                    fontSize: 11, color: addInput.trim().length > MAX_CUSTOM_CHARS ? 'rgba(239,68,68,0.8)' : 'var(--muted-color)',
                     fontVariantNumeric: 'tabular-nums',
                   }}>
-                    {addInput.length}/{MAX_CUSTOM_CHARS}
+                    {addInput.trim().length}/{MAX_CUSTOM_CHARS}
                   </span>
                 </div>
                 <p style={{ fontSize: 11, color: 'var(--muted-color)', margin: '5px 0 0', lineHeight: 1.4 }}>
-                  Chinese characters only · max {MAX_CUSTOM_CHARS} · pinyin &amp; definition auto-filled
+                  Max {MAX_CUSTOM_CHARS} Chinese characters · pinyin &amp; definition auto-filled
                 </p>
               </div>
 
