@@ -1,9 +1,19 @@
 import { Router, Request, Response } from 'express';
 import { body, param, validationResult } from 'express-validator';
+import { Prisma } from '../generated/prisma/client';
 import prisma from '../prisma/client';
 import { requireAuth } from '../middleware/auth';
 
 const router = Router();
+
+// Words that belong to the "Saved" deck: either saved from an article
+// (articleId != null) or manually created by the user (source = 'manual').
+const savedWordFilter: Prisma.WordWhereInput = {
+  OR: [
+    { articleId: { not: null } },
+    { source: 'manual' },
+  ],
+};
 
 // SM-2 algorithm — returns updated scheduling fields
 function computeSM2(
@@ -102,7 +112,7 @@ router.get('/saved', requireAuth, async (req: Request, res: Response) => {
     const savedCards = await prisma.flashcard.findMany({
       where: {
         userId,
-        word: { articleId: { not: null } },
+        word: savedWordFilter,
       },
       select: {
         nextReviewAt: true,
@@ -134,7 +144,7 @@ router.get('/study/saved', requireAuth, async (req: Request, res: Response) => {
     const savedCards = await prisma.flashcard.findMany({
       where: {
         userId,
-        word: { articleId: { not: null } },
+        word: savedWordFilter,
       },
       select: {
         id: true,
@@ -182,7 +192,7 @@ router.get('/preview/saved', requireAuth, async (req: Request, res: Response) =>
     const savedCards = await prisma.flashcard.findMany({
       where: {
         userId,
-        word: { articleId: { not: null } },
+        word: savedWordFilter,
       },
       select: {
         wordId: true,
@@ -359,6 +369,96 @@ router.get(
   }
 );
 
+// POST /api/srs/saved/custom — create a custom card (word + flashcard) in the saved deck
+router.post(
+  '/saved/custom',
+  requireAuth,
+  [
+    body('simplified').isString().trim().notEmpty().withMessage('simplified is required'),
+    body('pinyin').isString().trim().notEmpty().withMessage('pinyin is required'),
+    body('english').isString().trim().notEmpty().withMessage('english is required'),
+  ],
+  async (req: Request, res: Response) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      res.status(400).json({ errors: errors.array() });
+      return;
+    }
+
+    try {
+      const userId = req.user!.userId;
+      const { simplified, pinyin, english } = req.body as {
+        simplified: string;
+        pinyin: string;
+        english: string;
+      };
+
+      // Create the word (source='manual', articleId=null so it doesn't
+      // appear in HSK decks but is included in the savedWordFilter).
+      // If the exact same simplified+source='manual' word already exists
+      // for this user we reuse it (via upsert on a unique combo).
+      // Words are shared across users, so we just createMany/find.
+      let word = await prisma.word.findFirst({
+        where: { simplified, source: 'manual', articleId: null },
+        select: { id: true },
+      });
+
+      if (!word) {
+        word = await prisma.word.create({
+          data: {
+            simplified,
+            pinyin,
+            english,
+            source: 'manual',
+            isVerified: false,
+            articleId: null,
+          },
+          select: { id: true },
+        });
+      }
+
+      // Check if user already has a flashcard for this word
+      const existing = await prisma.flashcard.findUnique({
+        where: { userId_wordId: { userId, wordId: word.id } },
+        select: { id: true },
+      });
+
+      if (existing) {
+        res.status(409).json({ error: 'You already have a card for this word' });
+        return;
+      }
+
+      const flashcard = await prisma.flashcard.create({
+        data: {
+          userId,
+          wordId: word.id,
+          easeFactor: 2.5,
+          interval: 0,
+          repetitions: 0,
+          nextReviewAt: new Date(),
+        },
+        select: {
+          id: true,
+          wordId: true,
+          word: { select: { simplified: true, pinyin: true, english: true, hskLevel: true } },
+        },
+      });
+
+      res.status(201).json({
+        flashcardId: flashcard.id,
+        wordId: flashcard.wordId,
+        simplified: flashcard.word.simplified,
+        pinyin: flashcard.word.pinyin,
+        english: flashcard.word.english,
+        hskLevel: flashcard.word.hskLevel,
+      });
+    } catch (error) {
+      console.error('SRS create custom card error:', error);
+      res.status(500).json({ error: 'Failed to create card' });
+    }
+  }
+);
+
 // DELETE /api/srs/saved/:wordId — remove a single word from the saved deck
 router.delete('/saved/:wordId', requireAuth, async (req: Request, res: Response) => {
   try {
@@ -369,9 +469,9 @@ router.delete('/saved/:wordId', requireAuth, async (req: Request, res: Response)
       return;
     }
 
-    // Only delete if it's a flashcard for a word saved from an article
+    // Only delete if it's a flashcard for a saved or manually created word
     const card = await prisma.flashcard.findFirst({
-      where: { userId, wordId, word: { articleId: { not: null } } },
+      where: { userId, wordId, word: savedWordFilter },
       select: { id: true },
     });
 
@@ -396,7 +496,7 @@ router.delete('/saved', requireAuth, async (req: Request, res: Response) => {
     const result = await prisma.flashcard.deleteMany({
       where: {
         userId,
-        word: { articleId: { not: null } },
+        word: savedWordFilter,
       },
     });
 
@@ -425,7 +525,7 @@ router.patch('/saved/:wordId/interval', requireAuth, async (req: Request, res: R
     }
 
     const card = await prisma.flashcard.findFirst({
-      where: { userId, wordId, word: { articleId: { not: null } } },
+      where: { userId, wordId, word: savedWordFilter },
       select: { id: true },
     });
 

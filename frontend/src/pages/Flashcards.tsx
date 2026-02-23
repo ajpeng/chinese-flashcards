@@ -109,6 +109,12 @@ export default function Flashcards() {
   const [deletingWordId, setDeletingWordId] = useState<number | null>(null);
   const [reschedulingWordId, setReschedulingWordId] = useState<number | null>(null);
 
+  // Add custom card modal
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [addForm, setAddForm] = useState({ simplified: '', pinyin: '', english: '' });
+  const [addSubmitting, setAddSubmitting] = useState(false);
+  const [addError, setAddError] = useState<string | null>(null);
+
   const currentCard = cards[cardIndex] ?? null;
   const submittingRef = useRef(false);
 
@@ -385,6 +391,35 @@ export default function Flashcards() {
       alert('Failed to clear saved deck. Please try again.');
     } finally {
       setClearingAll(false);
+    }
+  };
+
+  const handleAddCard = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!accessToken) return;
+    const { simplified, pinyin, english } = addForm;
+    if (!simplified.trim() || !pinyin.trim() || !english.trim()) {
+      setAddError('All fields are required.');
+      return;
+    }
+    setAddSubmitting(true);
+    setAddError(null);
+    try {
+      const res = await fetch(`${API_URL}/api/srs/saved/custom`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
+        credentials: 'include',
+        body: JSON.stringify({ simplified: simplified.trim(), pinyin: pinyin.trim(), english: english.trim() }),
+      });
+      if (res.status === 409) { setAddError('You already have a card for this word.'); return; }
+      if (!res.ok) { setAddError('Failed to create card. Please try again.'); return; }
+      setShowAddModal(false);
+      setAddForm({ simplified: '', pinyin: '', english: '' });
+      fetchDecks();
+    } catch {
+      setAddError('Failed to create card. Please try again.');
+    } finally {
+      setAddSubmitting(false);
     }
   };
 
@@ -899,6 +934,25 @@ export default function Flashcards() {
                     Words saved from articles
                   </div>
                 </div>
+                {/* Add card button */}
+                <button
+                  onClick={() => { setAddForm({ simplified: '', pinyin: '', english: '' }); setAddError(null); setShowAddModal(true); }}
+                  title="Create a custom flashcard"
+                  style={{
+                    background: 'none',
+                    border: `1px solid ${savedColor}`,
+                    borderRadius: 6,
+                    padding: '4px 8px',
+                    cursor: 'pointer',
+                    color: savedColor,
+                    fontSize: 11,
+                    fontWeight: 600,
+                    whiteSpace: 'nowrap',
+                    flexShrink: 0,
+                  }}
+                >
+                  + Add Card
+                </button>
                 {/* Clear all button */}
                 <button
                   onClick={clearSavedDeck}
@@ -1134,6 +1188,139 @@ export default function Flashcards() {
             );
           })}
         </div>
+        </>
+      )}
+
+      {/* ── Add Custom Card Modal ─────────────────────────────────────────── */}
+      {showAddModal && (
+        <>
+          {/* Backdrop */}
+          <div
+            onClick={() => !addSubmitting && setShowAddModal(false)}
+            style={{
+              position: 'fixed', inset: 0, zIndex: 400,
+              background: 'rgba(0,0,0,0.5)',
+              backdropFilter: 'blur(2px)',
+            }}
+          />
+          {/* Modal */}
+          <div style={{
+            position: 'fixed',
+            top: '50%', left: '50%',
+            transform: 'translate(-50%, -50%)',
+            zIndex: 401,
+            width: 'min(420px, calc(100vw - 32px))',
+            background: 'var(--card-bg)',
+            border: '1px solid var(--border-color)',
+            borderRadius: 16,
+            padding: '24px',
+            boxShadow: '0 24px 64px rgba(0,0,0,0.4)',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+              <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>Add Custom Card</h3>
+              <button
+                onClick={() => setShowAddModal(false)}
+                disabled={addSubmitting}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 20, color: 'var(--muted-color)', lineHeight: 1, padding: '0 2px' }}
+              >×</button>
+            </div>
+
+            <form onSubmit={handleAddCard} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              {/* Chinese */}
+              <div>
+                <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--muted-color)', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: 6 }}>
+                  Chinese
+                </label>
+                <input
+                  value={addForm.simplified}
+                  onChange={e => setAddForm(f => ({ ...f, simplified: e.target.value }))}
+                  placeholder="e.g. 学习"
+                  autoFocus
+                  style={{
+                    width: '100%', padding: '9px 12px', borderRadius: 8,
+                    border: '1px solid var(--border-color)',
+                    background: 'var(--bg-secondary, rgba(128,128,128,0.08))',
+                    color: 'var(--text-color)', fontSize: 18,
+                    boxSizing: 'border-box', outline: 'none',
+                  }}
+                />
+              </div>
+
+              {/* Pinyin */}
+              <div>
+                <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--muted-color)', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: 6 }}>
+                  Pinyin
+                </label>
+                <input
+                  value={addForm.pinyin}
+                  onChange={e => setAddForm(f => ({ ...f, pinyin: e.target.value }))}
+                  placeholder="e.g. xué xí"
+                  style={{
+                    width: '100%', padding: '9px 12px', borderRadius: 8,
+                    border: '1px solid var(--border-color)',
+                    background: 'var(--bg-secondary, rgba(128,128,128,0.08))',
+                    color: 'var(--text-color)', fontSize: 15,
+                    boxSizing: 'border-box', outline: 'none',
+                  }}
+                />
+              </div>
+
+              {/* English */}
+              <div>
+                <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--muted-color)', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: 6 }}>
+                  English
+                </label>
+                <input
+                  value={addForm.english}
+                  onChange={e => setAddForm(f => ({ ...f, english: e.target.value }))}
+                  placeholder="e.g. to study; to learn"
+                  style={{
+                    width: '100%', padding: '9px 12px', borderRadius: 8,
+                    border: '1px solid var(--border-color)',
+                    background: 'var(--bg-secondary, rgba(128,128,128,0.08))',
+                    color: 'var(--text-color)', fontSize: 15,
+                    boxSizing: 'border-box', outline: 'none',
+                  }}
+                />
+              </div>
+
+              {addError && (
+                <div style={{ fontSize: 13, color: 'rgba(239,68,68,0.9)', padding: '8px 12px', background: 'rgba(239,68,68,0.08)', borderRadius: 8 }}>
+                  {addError}
+                </div>
+              )}
+
+              <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
+                <button
+                  type="button"
+                  onClick={() => setShowAddModal(false)}
+                  disabled={addSubmitting}
+                  style={{
+                    flex: 1, padding: '10px 0', borderRadius: 8,
+                    border: '1px solid var(--border-color)',
+                    background: 'transparent', color: 'var(--muted-color)',
+                    fontSize: 14, fontWeight: 600, cursor: 'pointer',
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={addSubmitting}
+                  style={{
+                    flex: 1, padding: '10px 0', borderRadius: 8,
+                    border: 'none',
+                    background: addSubmitting ? 'rgba(100,108,255,0.5)' : savedColor,
+                    color: '#fff',
+                    fontSize: 14, fontWeight: 600,
+                    cursor: addSubmitting ? 'not-allowed' : 'pointer',
+                  }}
+                >
+                  {addSubmitting ? 'Adding…' : 'Add Card'}
+                </button>
+              </div>
+            </form>
+          </div>
         </>
       )}
     </div>
