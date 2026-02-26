@@ -5,6 +5,7 @@ import { TTSSegmentationService } from '../services/tts-segmentation.service';
 import { TokenizationService } from '../services/tokenization.service';
 import { createHash } from 'crypto';
 import prisma from '../prisma/client';
+import logger from '../utils/logger';
 
 const router = Router();
 
@@ -13,7 +14,7 @@ const AZURE_SPEECH_KEY = process.env.AZURE_SPEECH_KEY;
 const AZURE_SPEECH_REGION = process.env.AZURE_SPEECH_REGION || 'eastus';
 
 if (!AZURE_SPEECH_KEY) {
-  console.error('AZURE_SPEECH_KEY environment variable is required');
+  logger.error('AZURE_SPEECH_KEY environment variable is required');
 }
 
 interface WordTiming {
@@ -62,7 +63,7 @@ router.post(
 
     const { text, voice = 'zh-CN-XiaoxiaoNeural', rate = '1.0', words = [] } = req.body;
 
-    console.log('TTS request for text:', text.substring(0, 50) + (text.length > 50 ? '...' : ''));
+    logger.info({ textPreview: text.substring(0, 50) }, 'TTS request received');
 
     // Create cache hash (include words for consistent tokenization)
     const wordsString = JSON.stringify(words);
@@ -74,7 +75,7 @@ router.post(
     });
 
     if (cachedTTS) {
-      console.log('Cache hit! Returning cached TTS audio');
+      logger.info({ event: 'tts_cache_hit' }, 'Cache hit - returning cached TTS audio');
 
       // Update last used timestamp
       await prisma.tTSCache.update({
@@ -102,11 +103,11 @@ router.post(
       return;
     }
 
-    console.log('Cache miss. Generating new TTS audio');
+    logger.info({ event: 'tts_cache_miss' }, 'Cache miss - generating new TTS audio');
 
     // Segment text for consistent word boundaries
     const segments = TTSSegmentationService.segmentText(text);
-    console.log('Segmented into', segments.length, 'words');
+    logger.info({ segmentCount: segments.length }, 'Text segmented');
 
     // Preprocess text for better TTS boundaries
     const processedText = TTSSegmentationService.preprocessForTTS(text);
@@ -134,7 +135,7 @@ router.post(
       const audioOffsetMs = event.audioOffset / 10000; // Convert from ticks to milliseconds
       const durationMs = event.duration / 10000; // Convert from ticks to milliseconds
       
-      console.log(`Word boundary: ${event.text} at ${audioOffsetMs}ms, duration: ${durationMs}ms`);
+      logger.debug({ text: event.text, audioOffsetMs, durationMs }, 'Word boundary');
       
       wordTimings.push({
         word: event.text,
@@ -176,14 +177,11 @@ router.post(
       const tokens = TokenizationService.tokenize(text, words);
       const tokenMappings = TokenizationService.createTokenToSegmentMapping(tokens, segments, mappings);
 
-      console.log(`TTS completed. ${wordTimings.length} boundaries, ${segments.length} segments, ${mappings.length} mappings, ${tokens.length} tokens`);
+      logger.info({ wordTimings: wordTimings.length, segments: segments.length, mappings: mappings.length, tokens: tokens.length }, 'TTS synthesis completed');
       
       // Debug specific problematic text
       if (text.includes('北卡罗莱纳州')) {
-        console.log('DEBUG: Text contains 北卡罗莱纳州');
-        console.log('Tokens:', tokens.slice(0, 20).map(t => ({ text: t.text, index: t.index })));
-        console.log('Segments:', segments.slice(0, 10));
-        console.log('Token mappings:', tokenMappings.slice(0, 10));
+        logger.debug({ tokens: tokens.slice(0, 20), segments: segments.slice(0, 10), tokenMappings: tokenMappings.slice(0, 10) }, 'DEBUG: Text contains 北卡罗莱纳州');
       }
 
       // Cache the generated TTS
@@ -202,9 +200,9 @@ router.post(
             lastUsedAt: new Date()
           }
         });
-        console.log('TTS audio cached successfully');
+        logger.info({ event: 'tts_cached' }, 'TTS audio cached');
       } catch (cacheError) {
-        console.error('Failed to cache TTS audio:', cacheError);
+        logger.error({ err: cacheError }, 'Failed to cache TTS audio');
         // Don't fail the request if caching fails
       }
 
@@ -220,7 +218,7 @@ router.post(
 
       res.json(response);
     } else {
-      console.error('TTS synthesis failed:', result.errorDetails);
+      logger.error({ errorDetails: result.errorDetails }, 'TTS synthesis failed');
       res.status(500).json({ error: 'Speech synthesis failed: ' + result.errorDetails });
     }
   }
@@ -245,7 +243,7 @@ router.get('/cache/stats', async (req: Request, res: Response) => {
       newestEntry: newestEntry?.createdAt
     });
   } catch (error) {
-    console.error('Cache stats error:', error);
+    logger.error({ err: error }, 'TTS cache stats error');
     res.status(500).json({ error: 'Failed to get cache stats' });
   }
 });
@@ -268,7 +266,7 @@ router.delete('/cache/cleanup', async (req: Request, res: Response) => {
       message: `Cleaned up ${deletedEntries.count} cache entries older than 30 days` 
     });
   } catch (error) {
-    console.error('Cache cleanup error:', error);
+    logger.error({ err: error }, 'TTS cache cleanup error');
     res.status(500).json({ error: 'Failed to cleanup cache' });
   }
 });
@@ -286,7 +284,7 @@ router.get('/health', async (req: Request, res: Response) => {
     
     res.json(healthCheck);
   } catch (error) {
-    console.error('TTS health check error:', error);
+    logger.error({ err: error }, 'TTS health check error');
     res.status(500).json({ 
       error: 'TTS health check failed',
       details: error instanceof Error ? error.message : 'Unknown error'

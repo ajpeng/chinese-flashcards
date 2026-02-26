@@ -5,6 +5,7 @@ import { enrichmentService } from '../services/enrichment.service';
 import { CreateArticleRequest, CreateArticleResponse } from '../types/segmentation.types';
 import { requireAuth, optionalAuth } from '../middleware/auth';
 import { articleCreationRateLimiter } from '../middleware/rateLimit';
+import logger from '../utils/logger';
 
 const router = Router();
 
@@ -18,8 +19,7 @@ router.get('/', optionalAuth, async (req: Request, res: Response, _next: NextFun
 
     res.json(articles);
   } catch (error) {
-    // eslint-disable-next-line no-console
-    console.error('Error fetching articles', error);
+    logger.error({ err: error }, 'Error fetching articles');
     res.status(500).json({ error: 'Failed to load articles' });
   }
 });
@@ -161,8 +161,7 @@ router.post(
 
     res.status(201).json(response);
   } catch (error) {
-    // eslint-disable-next-line no-console
-    console.error('Error creating article', error);
+    logger.error({ err: error }, 'Error creating article');
     res.status(500).json({ error: 'Failed to create article' });
   }
 }

@@ -6,10 +6,18 @@
  * fully asynchronously so the HTTP response is never blocked.
  *
  * Job lifecycle: pending → running → done | failed
+ *
+ * Cost controls:
+ *  - Per-article lookup cap (MAX_LOOKUPS_PER_ARTICLE env var)
+ *  - Per-user daily cap (MAX_AI_LOOKUPS_PER_USER_PER_DAY env var)
  */
 
 import prisma from '../prisma/client';
 import { lookupService } from './lookup.service';
+import logger from '../utils/logger';
+
+const MAX_AI_LOOKUPS_PER_USER_PER_DAY =
+  parseInt(process.env.MAX_AI_LOOKUPS_PER_USER_PER_DAY ?? '50', 10);
 
 type JobStatus = 'pending' | 'running' | 'done' | 'failed';
 
@@ -54,11 +62,29 @@ class EnrichmentService {
     // Use setImmediate so the HTTP response is sent before we start
     setImmediate(() => {
       this.run(job, maxLookups).catch((err) => {
-        console.error('[Enrichment] Unhandled error for article', articleId, err);
+        logger.error({ err, articleId }, 'Unhandled enrichment error');
         job.status = 'failed';
         job.error = String(err);
         job.finishedAt = new Date();
       });
+    });
+  }
+
+  /**
+   * Count how many AI lookups this user has made today (UTC day boundary).
+   * Returns 0 for anonymous users (userId = null).
+   */
+  private async dailyUsageCount(userId: string | null): Promise<number> {
+    if (!userId) return 0;
+
+    const startOfDay = new Date();
+    startOfDay.setUTCHours(0, 0, 0, 0);
+
+    return prisma.aiUsageLog.count({
+      where: {
+        userId,
+        createdAt: { gte: startOfDay },
+      },
     });
   }
 
@@ -67,7 +93,39 @@ class EnrichmentService {
     job.startedAt = new Date();
 
     const { articleId } = job;
-    console.log(`[Enrichment] Starting AI enrichment for article ${articleId}`);
+
+    // Look up the article's owner for daily-cap enforcement
+    const article = await prisma.article.findUnique({
+      where: { id: articleId },
+      select: { userId: true },
+    });
+    const userId = article?.userId ?? null;
+
+    // Check per-user daily cap
+    const usedToday = await this.dailyUsageCount(userId);
+    let remainingBudget = userId
+      ? Math.max(0, MAX_AI_LOOKUPS_PER_USER_PER_DAY - usedToday)
+      : maxLookups; // anonymous: fall back to per-article limit only
+
+    logger.info({
+      articleId,
+      userId,
+      usedToday,
+      remainingBudget,
+      maxLookups,
+    }, 'Starting AI enrichment');
+
+    if (remainingBudget === 0) {
+      logger.warn({
+        event: 'daily_cap_reached',
+        userId,
+        limit: MAX_AI_LOOKUPS_PER_USER_PER_DAY,
+        articleId,
+      }, 'User has reached daily AI lookup cap — skipping enrichment');
+      job.status = 'done';
+      job.finishedAt = new Date();
+      return;
+    }
 
     try {
       // Fetch all words for this article that are missing a definition
@@ -82,18 +140,24 @@ class EnrichmentService {
       });
 
       if (missing.length === 0) {
-        console.log(`[Enrichment] Article ${articleId}: no words need enrichment`);
+        logger.info({ articleId }, 'No words need enrichment');
         job.status = 'done';
         job.finishedAt = new Date();
         return;
       }
 
-      console.log(`[Enrichment] Article ${articleId}: ${missing.length} words need enrichment (max ${maxLookups})`);
+      logger.info({
+        articleId,
+        missingCount: missing.length,
+        maxLookups,
+        remainingBudget,
+      }, 'Words queued for enrichment');
 
       let lookupsUsed = 0;
+      const effectiveMax = Math.min(maxLookups, remainingBudget);
 
       for (const wordRow of missing) {
-        if (lookupsUsed >= maxLookups) break;
+        if (lookupsUsed >= effectiveMax) break;
 
         const segment = wordRow.simplified;
 
@@ -111,8 +175,8 @@ class EnrichmentService {
           continue;
         }
 
-        // 2. AI lookup
-        const result = await lookupService.lookupWord(segment);
+        // 2. AI lookup — pass userId + articleId for cost tracking
+        const result = await lookupService.lookupWord(segment, { userId: userId ?? undefined, articleId });
         if (!result) continue;
 
         lookupsUsed++;
@@ -154,15 +218,15 @@ class EnrichmentService {
             });
           }
         } catch (cacheErr) {
-          console.error('[Enrichment] Failed to persist shared cache for:', segment, cacheErr);
+          logger.error({ err: cacheErr, simplified: segment }, 'Failed to persist shared cache');
         }
       }
 
-      console.log(`[Enrichment] Article ${articleId}: done (${lookupsUsed} AI lookups used)`);
+      logger.info({ articleId, lookupsUsed, effectiveMax }, 'Enrichment complete');
       job.status = 'done';
       job.finishedAt = new Date();
     } catch (err) {
-      console.error(`[Enrichment] Failed for article ${articleId}:`, err);
+      logger.error({ err, articleId }, 'Enrichment job failed');
       job.status = 'failed';
       job.error = String(err);
       job.finishedAt = new Date();

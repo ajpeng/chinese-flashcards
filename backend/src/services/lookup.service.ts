@@ -5,6 +5,14 @@
 
 import OpenAI from 'openai';
 import prisma from '../prisma/client';
+import logger from '../utils/logger';
+import { CircuitBreaker } from '../utils/circuitBreaker';
+
+// Claude 3.5 Haiku pricing via OpenRouter ($/million tokens)
+const COST_PER_M_INPUT  = 0.80;
+const COST_PER_M_OUTPUT = 4.00;
+
+const MODEL = 'anthropic/claude-3.5-haiku';
 
 interface LookupResult {
   pinyin: string | null;
@@ -12,8 +20,14 @@ interface LookupResult {
   source: 'ai' | 'manual';
 }
 
+interface LookupContext {
+  userId?: string;
+  articleId?: number;
+}
+
 class LookupService {
   private client: OpenAI | null = null;
+  private breaker = new CircuitBreaker({ failureThreshold: 3, resetTimeout: 60_000 });
 
   constructor() {
     if (process.env.OPENROUTER_API_KEY) {
@@ -47,7 +61,7 @@ class LookupService {
       });
 
       if (existingWord && existingWord.pinyin && existingWord.english) {
-        console.log(`[LookupService] ✓ Cache hit: ${simplified}`);
+        logger.info({ event: 'cache_hit', simplified }, 'Word definition found in cache');
         return {
           pinyin: existingWord.pinyin,
           english: existingWord.english,
@@ -57,12 +71,12 @@ class LookupService {
 
       return null;
     } catch (error) {
-      console.error('[LookupService] Cache lookup error:', error);
+      logger.error({ err: error, simplified }, 'Cache lookup error');
       return null;
     }
   }
 
-  async lookupWord(simplified: string): Promise<LookupResult | null> {
+  async lookupWord(simplified: string, context: LookupContext = {}): Promise<LookupResult | null> {
     try {
       if (!simplified || simplified.trim().length === 0) {
         return null;
@@ -74,12 +88,22 @@ class LookupService {
       }
 
       if (!this.client) {
-        console.log(`[LookupService] No API key configured, skipping lookup for: ${simplified}`);
+        logger.info({ simplified }, 'No API key configured, skipping lookup');
+        return null;
+      }
+
+      // Circuit breaker: fast-fail when the breaker is OPEN
+      if (!this.breaker.canCall()) {
+        logger.warn({
+          event: 'circuit_open',
+          simplified,
+          failureCount: this.breaker.getFailureCount(),
+        }, 'Circuit breaker is OPEN — skipping AI lookup');
         return null;
       }
 
       const completion = await this.client.chat.completions.create({
-        model: 'anthropic/claude-3.5-haiku',
+        model: MODEL,
         max_tokens: 200,
         messages: [{
           role: 'user',
@@ -93,6 +117,9 @@ If it's a proper name, include that in the definition.`
         }]
       });
 
+      // Circuit breaker: record success
+      this.breaker.recordSuccess();
+
       const text = completion.choices[0]?.message?.content?.trim();
       if (!text) {
         return null;
@@ -101,14 +128,48 @@ If it's a proper name, include that in the definition.`
       const englishMatch = text.match(/english:\s*(.+)/i);
 
       if (!pinyinMatch || !englishMatch) {
-        console.log(`[LookupService] Failed to parse response for ${simplified}: ${text}`);
+        logger.warn({ simplified, response: text }, 'Failed to parse AI response');
         return null;
       }
 
       const pinyin = this.normalizePinyin(pinyinMatch[1].trim());
       const english = englishMatch[1].trim();
 
-      console.log(`[LookupService] ✓ Found: ${simplified} = ${pinyin} (${english})`);
+      // Cost estimation
+      const tokensIn  = completion.usage?.prompt_tokens     ?? 0;
+      const tokensOut = completion.usage?.completion_tokens ?? 0;
+      const estimatedCostUsd =
+        (tokensIn  / 1_000_000) * COST_PER_M_INPUT +
+        (tokensOut / 1_000_000) * COST_PER_M_OUTPUT;
+
+      logger.info({
+        event: 'ai_call',
+        simplified,
+        pinyin,
+        english,
+        model: MODEL,
+        tokensIn,
+        tokensOut,
+        estimatedCostUsd: +estimatedCostUsd.toFixed(6),
+        userId: context.userId,
+        articleId: context.articleId,
+      }, 'AI word lookup succeeded');
+
+      // Persist usage log for cost tracking
+      await prisma.aiUsageLog.create({
+        data: {
+          userId: context.userId ?? null,
+          wordSimplified: simplified,
+          tokensIn,
+          tokensOut,
+          estimatedCostUsd,
+          model: MODEL,
+          articleId: context.articleId ?? null,
+        },
+      }).catch((err) => {
+        // Non-fatal — don't let logging failure block the main flow
+        logger.error({ err, simplified }, 'Failed to write AiUsageLog entry');
+      });
 
       return {
         pinyin,
@@ -116,16 +177,23 @@ If it's a proper name, include that in the definition.`
         source: 'ai'
       };
     } catch (error) {
-      console.error('[LookupService] Error looking up word:', error);
+      // Circuit breaker: record failure on any error
+      this.breaker.recordFailure();
+      logger.error({
+        err: error,
+        simplified,
+        circuitState: this.breaker.getState(),
+        failureCount: this.breaker.getFailureCount(),
+      }, 'AI word lookup failed');
       return null;
     }
   }
 
-  async lookupBatch(words: string[]): Promise<Map<string, LookupResult>> {
+  async lookupBatch(words: string[], context: LookupContext = {}): Promise<Map<string, LookupResult>> {
     const results = new Map<string, LookupResult>();
 
     for (const word of words) {
-      const result = await this.lookupWord(word);
+      const result = await this.lookupWord(word, context);
       if (result) {
         results.set(word, result);
       }

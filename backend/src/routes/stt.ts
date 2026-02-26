@@ -3,6 +3,7 @@ import * as sdk from 'microsoft-cognitiveservices-speech-sdk';
 import { body, validationResult } from 'express-validator';
 import multer from 'multer';
 import fs from 'fs';
+import logger from '../utils/logger';
 
 const router = Router();
 
@@ -11,7 +12,7 @@ const AZURE_SPEECH_KEY = process.env.AZURE_SPEECH_KEY;
 const AZURE_SPEECH_REGION = process.env.AZURE_SPEECH_REGION || 'eastus';
 
 if (!AZURE_SPEECH_KEY) {
-  console.error('AZURE_SPEECH_KEY environment variable is required for STT');
+  logger.error('AZURE_SPEECH_KEY environment variable is required for STT');
 }
 
 // Configure multer for file uploads
@@ -60,7 +61,7 @@ router.post(
         return;
       }
 
-      console.log('Processing audio file:', req.file.originalname, 'Type:', req.file.mimetype, 'Size:', req.file.size);
+      logger.info({ filename: req.file.originalname, mimetype: req.file.mimetype, size: req.file.size }, 'Processing audio file');
 
       // Create speech config
       const speechConfig = sdk.SpeechConfig.fromSubscription(AZURE_SPEECH_KEY, AZURE_SPEECH_REGION);
@@ -76,7 +77,7 @@ router.post(
             audioConfig = sdk.AudioConfig.fromWavFileInput(fs.readFileSync(req.file.path));
             recognizer = new sdk.SpeechRecognizer(speechConfig, audioConfig);
           } catch (wavError) {
-            console.log('WAV file input failed, trying push stream:', wavError);
+            logger.warn({ err: wavError }, 'WAV file input failed, trying push stream');
             throw wavError; // Will be caught by outer try-catch
           }
         } else {
@@ -97,7 +98,7 @@ router.post(
           recognizer = new sdk.SpeechRecognizer(speechConfig, audioConfig);
         }
 
-        console.log('Starting Azure Speech recognition...');
+        logger.info('Starting Azure Speech recognition');
         
         // Perform recognition
         const result = await new Promise<sdk.SpeechRecognitionResult>((resolve, reject) => {
@@ -111,7 +112,7 @@ router.post(
         recognizer.close();
 
         if (result.reason === sdk.ResultReason.RecognizedSpeech) {
-          console.log('Recognition successful:', result.text);
+          logger.info({ text: result.text }, 'Recognition successful');
           
           const response: STTResponse = {
             text: result.text.trim(),
@@ -122,21 +123,21 @@ router.post(
 
           res.json(response);
         } else if (result.reason === sdk.ResultReason.NoMatch) {
-          console.log('No speech detected in audio file');
+          logger.info('No speech detected in audio file');
           res.status(400).json({ error: 'No speech could be recognized from the audio. Please ensure the audio contains clear speech.' });
         } else if (result.reason === sdk.ResultReason.Canceled) {
           const cancellation = sdk.CancellationDetails.fromResult(result);
-          console.error('Recognition cancelled:', cancellation.reason, cancellation.errorDetails);
+          logger.error({ reason: cancellation.reason, errorDetails: cancellation.errorDetails }, 'Recognition cancelled');
           res.status(500).json({ 
             error: 'Recognition was cancelled', 
             details: cancellation.errorDetails || 'Unknown cancellation reason'
           });
         } else {
-          console.error('Recognition failed with reason:', result.reason);
+          logger.error({ reason: result.reason }, 'Recognition failed');
           res.status(500).json({ error: 'Speech recognition failed with unexpected result' });
         }
       } catch (processingError) {
-        console.error('Audio processing error:', processingError);
+        logger.error({ err: processingError }, 'Audio processing error');
         res.status(500).json({ 
           error: 'Failed to process audio file. The audio format may not be compatible or the file may be corrupted.',
           details: processingError instanceof Error ? processingError.message : 'Unknown processing error',
@@ -147,11 +148,11 @@ router.post(
         try {
           fs.unlinkSync(req.file.path);
         } catch (cleanupError) {
-          console.error('Failed to cleanup uploaded file:', cleanupError);
+          logger.error({ err: cleanupError }, 'Failed to cleanup uploaded file');
         }
       }
     } catch (error) {
-      console.error('STT endpoint error:', error);
+      logger.error({ err: error }, 'STT endpoint error');
       res.status(500).json({ error: error instanceof Error ? error.message : 'STT processing failed' });
     }
   }

@@ -3,6 +3,7 @@ import { body, param, validationResult } from 'express-validator';
 import { Prisma } from '../generated/prisma/client';
 import prisma from '../prisma/client';
 import { requireAuth } from '../middleware/auth';
+import logger from '../utils/logger';
 
 const router = Router();
 
@@ -98,7 +99,7 @@ router.get('/decks', requireAuth, async (req: Request, res: Response) => {
 
     res.json(decks);
   } catch (error) {
-    console.error('SRS decks error:', error);
+    logger.error({ err: error }, 'SRS decks error');
     res.status(500).json({ error: 'Failed to load deck stats' });
   }
 });
@@ -128,7 +129,7 @@ router.get('/saved', requireAuth, async (req: Request, res: Response) => {
       dueCards,
     });
   } catch (error) {
-    console.error('SRS saved deck error:', error);
+    logger.error({ err: error }, 'SRS saved deck error');
     res.status(500).json({ error: 'Failed to load saved deck stats' });
   }
 });
@@ -179,7 +180,7 @@ router.get('/study/saved', requireAuth, async (req: Request, res: Response) => {
 
     res.json(sessionCards);
   } catch (error) {
-    console.error('SRS study saved error:', error);
+    logger.error({ err: error }, 'SRS study saved error');
     res.status(500).json({ error: 'Failed to load study cards' });
   }
 });
@@ -218,7 +219,7 @@ router.get('/preview/saved', requireAuth, async (req: Request, res: Response) =>
 
     res.json(previewCards);
   } catch (error) {
-    console.error('SRS preview saved error:', error);
+    logger.error({ err: error }, 'SRS preview saved error');
     res.status(500).json({ error: 'Failed to load preview cards' });
   }
 });
@@ -312,7 +313,7 @@ router.get(
 
       res.json(sessionCards);
     } catch (error) {
-      console.error('SRS study error:', error);
+      logger.error({ err: error }, 'SRS study error');
       res.status(500).json({ error: 'Failed to load study cards' });
     }
   }
@@ -363,7 +364,7 @@ router.get(
 
       res.json(previewCards);
     } catch (error) {
-      console.error('SRS preview error:', error);
+      logger.error({ err: error }, 'SRS preview error');
       res.status(500).json({ error: 'Failed to load preview cards' });
     }
   }
@@ -453,7 +454,7 @@ router.post(
         hskLevel: flashcard.word.hskLevel,
       });
     } catch (error) {
-      console.error('SRS create custom card error:', error);
+      logger.error({ err: error }, 'SRS create custom card error');
       res.status(500).json({ error: 'Failed to create card' });
     }
   }
@@ -483,7 +484,7 @@ router.delete('/saved/:wordId', requireAuth, async (req: Request, res: Response)
     await prisma.flashcard.delete({ where: { id: card.id } });
     res.json({ ok: true });
   } catch (error) {
-    console.error('SRS delete saved word error:', error);
+    logger.error({ err: error }, 'SRS delete saved word error');
     res.status(500).json({ error: 'Failed to remove word' });
   }
 });
@@ -502,7 +503,7 @@ router.delete('/saved', requireAuth, async (req: Request, res: Response) => {
 
     res.json({ ok: true, deleted: result.count });
   } catch (error) {
-    console.error('SRS clear saved deck error:', error);
+    logger.error({ err: error }, 'SRS clear saved deck error');
     res.status(500).json({ error: 'Failed to clear saved deck' });
   }
 });
@@ -544,7 +545,7 @@ router.patch('/saved/:wordId/interval', requireAuth, async (req: Request, res: R
 
     res.json({ ok: true, interval: days, nextReviewAt });
   } catch (error) {
-    console.error('SRS reschedule error:', error);
+    logger.error({ err: error }, 'SRS reschedule error');
     res.status(500).json({ error: 'Failed to reschedule word' });
   }
 });
@@ -637,7 +638,7 @@ router.post(
         lastReviewedAt: flashcard.lastReviewedAt,
       });
     } catch (error) {
-      console.error('SRS review error:', error);
+      logger.error({ err: error }, 'SRS review error');
       res.status(500).json({ error: 'Failed to submit review' });
     }
   }

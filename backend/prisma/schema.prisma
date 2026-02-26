@@ -90,6 +90,21 @@ model ExampleSentence {
   @@index([simplified])
 }
 
+model AiUsageLog {
+  id               String   @id @default(cuid())
+  userId           String?  // null for anonymous/unauthenticated enrichment
+  wordSimplified   String
+  tokensIn         Int
+  tokensOut        Int
+  estimatedCostUsd Float    // (tokensIn / 1M) * 0.80 + (tokensOut / 1M) * 4.00
+  model            String   @default("anthropic/claude-3.5-haiku")
+  articleId        Int?
+  createdAt        DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@index([createdAt])
+}
+
 model TTSCache {
   id            String   @id @default(cuid())
   textHash      String   @unique // SHA-256 hash of text+voice+rate combination

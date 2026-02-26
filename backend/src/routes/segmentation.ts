@@ -5,6 +5,7 @@
 import express, { Request, Response } from 'express';
 import { segmentationService } from '../services/segmentation.service';
 import { AnalyzeTextRequest, AnalyzeTextResponse } from '../types/segmentation.types';
+import logger from '../utils/logger';
 
 const router = express.Router();
 
@@ -63,7 +64,7 @@ router.post('/analyze', async (req: Request, res: Response) => {
 
     res.json(response);
   } catch (error) {
-    console.error('Error analyzing text:', error);
+    logger.error({ err: error }, 'Error analyzing text');
     res.status(500).json({
       error: 'Internal server error during text analysis',
     });

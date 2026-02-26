@@ -1,5 +1,6 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { addFlashcard, listFlashcards, removeFlashcard } from '../mock/mockFlashcardsStore';
+import logger from '../utils/logger';
 
 const router = Router();
 
@@ -20,9 +21,7 @@ router.post('/mock/flashcards', (req: Request, res: Response) => {
   const userId = 'mock-user';
   const rec = addFlashcard(userId, wordId);
 
-  // Log to server console for visibility
-  // eslint-disable-next-line no-console
-  console.log('Mock flashcard added:', rec);
+  logger.info({ rec }, 'Mock flashcard added');
 
   return res.status(201).json(rec);
 });
@@ -37,8 +36,7 @@ router.delete('/mock/flashcards', (req: Request, res: Response) => {
   const userId = 'mock-user';
   const removed = removeFlashcard(userId, wordId);
 
-  // eslint-disable-next-line no-console
-  console.log('Mock flashcard(s) removed:', { userId, wordId, removed });
+  logger.info({ userId, wordId, removed }, 'Mock flashcard removed');
 
   return res.json({ removed });
 });

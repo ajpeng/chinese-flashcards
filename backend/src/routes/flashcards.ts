@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { body, validationResult } from 'express-validator';
 import prisma from '../prisma/client';
 import { requireAuth } from '../middleware/auth';
+import logger from '../utils/logger';
 
 const router = Router();
 
@@ -66,8 +67,7 @@ router.post(
 
       res.status(201).json(flashcard);
     } catch (error) {
-      // eslint-disable-next-line no-console
-      console.error('Error creating flashcard', error);
+      logger.error({ err: error }, 'Error creating flashcard');
       res.status(500).json({ error: 'Failed to create flashcard' });
     }
   }
@@ -99,8 +99,7 @@ router.get('/', async (req: Request, res: Response) => {
 
     res.json(flashcards);
   } catch (error) {
-    // eslint-disable-next-line no-console
-    console.error('Error fetching flashcards', error);
+    logger.error({ err: error }, 'Error fetching flashcards');
     res.status(500).json({ error: 'Failed to fetch flashcards' });
   }
 });
@@ -148,8 +147,7 @@ router.delete('/:wordId', async (req: Request, res: Response) => {
 
     res.json({ message: 'Flashcard removed successfully' });
   } catch (error) {
-    // eslint-disable-next-line no-console
-    console.error('Error deleting flashcard', error);
+    logger.error({ err: error }, 'Error deleting flashcard');
     res.status(500).json({ error: 'Failed to delete flashcard' });
   }
 });

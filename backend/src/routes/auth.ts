@@ -3,6 +3,7 @@ import { body, validationResult } from 'express-validator';
 import prisma from '../prisma/client';
 import { generateAccessToken, generateRefreshToken } from '../utils/jwt';
 import { requireAuth } from '../middleware/auth';
+import logger from '../utils/logger';
 
 const router = Router();
 
@@ -62,7 +63,7 @@ router.get('/patreon/callback', async (req: Request, res: Response) => {
 
     if (!tokenRes.ok) {
       const errBody = await tokenRes.text();
-      console.error('Patreon token exchange failed:', errBody);
+      logger.error({ errBody }, 'Patreon token exchange failed');
       res.redirect(`${frontendBase}?error=patreon_token_exchange_failed`);
       return;
     }
@@ -134,7 +135,7 @@ router.get('/patreon/callback', async (req: Request, res: Response) => {
     // The frontend AuthContext detects ?token= on mount and stores it.
     res.redirect(`${frontendBase}/?token=${encodeURIComponent(accessToken)}`);
   } catch (error) {
-    console.error('Patreon OAuth callback error:', error);
+    logger.error({ err: error }, 'Patreon OAuth callback error');
     res.redirect(`${frontendBase}?error=patreon_oauth_error`);
   }
 });
@@ -179,7 +180,7 @@ router.get('/me', requireAuth, async (req: Request, res: Response) => {
 
     res.json(user);
   } catch (error) {
-    console.error('Error fetching user', error);
+    logger.error({ err: error }, 'Error fetching user');
     res.status(500).json({ error: 'Failed to fetch user' });
   }
 });
@@ -254,7 +255,7 @@ router.patch(
 
       res.json(user);
     } catch (error) {
-      console.error('Error updating settings', error);
+      logger.error({ err: error }, 'Error updating settings');
       res.status(500).json({ error: 'Failed to update settings' });
     }
   }
@@ -286,7 +287,7 @@ router.get('/dev-login', async (_req: Request, res: Response) => {
 
     res.json({ accessToken });
   } catch (error) {
-    console.error('Dev login error:', error);
+    logger.error({ err: error }, 'Dev login error');
     res.status(500).json({ error: 'Dev login failed' });
   }
 });

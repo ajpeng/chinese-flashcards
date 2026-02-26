@@ -3,7 +3,8 @@ import express, { Application, Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import path from 'path';
 import cookieParser from 'cookie-parser';
-import logger from 'morgan';
+import pinoHttp from 'pino-http';
+import logger from './utils/logger';
 
 import indexRouter from './routes/index';
 import usersRouter from './routes/users';
@@ -30,8 +31,7 @@ app.set('trust proxy', 1);
     await dictionaryService.initialize();
     await segmentationService.initialize();
   } catch (error) {
-    // eslint-disable-next-line no-console
-    console.error('Failed to initialize services:', error);
+    logger.error({ err: error }, 'Failed to initialize services');
     process.exit(1);
   }
 })();
@@ -51,7 +51,17 @@ const PROJECT_ROOT = process.cwd();
 app.set('views', path.join(PROJECT_ROOT, 'views'));
 app.set('view engine', 'jade');
 
-app.use(logger('dev'));
+// Attach a unique request ID to every request for log correlation
+app.use((req: Request, res: Response, next: NextFunction) => {
+  const requestId = crypto.randomUUID();
+  (req as any).id = requestId;
+  res.setHeader('x-request-id', requestId);
+  next();
+});
+
+// Structured HTTP request logging (replaces morgan)
+app.use(pinoHttp({ logger }));
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 app.use(cookieParser());
@@ -95,8 +105,7 @@ app.get('/test-db', async (_req: Request, res: Response) => {
     const result = await pool.query('SELECT NOW()');
     res.json(result.rows);
   } catch (err) {
-    // eslint-disable-next-line no-console
-    console.error(err);
+    logger.error({ err }, 'Database connection error');
     res.status(500).send('Database connection error');
   }
 });

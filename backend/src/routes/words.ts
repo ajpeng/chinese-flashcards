@@ -5,6 +5,7 @@ import { Pool } from 'pg';
 import { dictionaryService } from '../services/dictionary.service';
 import { lookupService } from '../services/lookup.service';
 import prisma from '../prisma/client';
+import logger from '../utils/logger';
 
 // Raw pg pool for queries unsupported by Prisma's driver-adapter $queryRaw.
 // In production we verify the RDS server cert against the AWS CA bundle that
@@ -16,7 +17,7 @@ function buildSslConfig() {
     return { ca: fs.readFileSync(caPath).toString() };
   }
   // Fallback: still encrypt but skip cert verification (better than plaintext)
-  console.warn('[pool] rds-ca-bundle.pem not found, falling back to rejectUnauthorized:false');
+  logger.warn('rds-ca-bundle.pem not found, falling back to rejectUnauthorized:false');
   return { rejectUnauthorized: false };
 }
 
@@ -102,7 +103,7 @@ router.get('/lookup', async (req: Request, res: Response) => {
     }
   } catch (err) {
     // Non-fatal — still return the result even if DB write fails
-    console.error('[words/lookup] Failed to persist AI result:', err);
+    logger.error({ err }, 'Failed to persist AI result');
   }
 
   const hskLevel = dictionaryService.getHskLevel?.(word) ?? null;
