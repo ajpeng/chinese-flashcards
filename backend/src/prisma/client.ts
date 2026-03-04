@@ -13,28 +13,24 @@ if (!connectionString) {
   throw new Error('DATABASE_URL is not set');
 }
 
-// Configure SSL for RDS connection
 const isLocalhost = connectionString.includes('localhost');
 
-// Remove any sslmode parameter from connection string to avoid conflicts
-let finalConnectionString = connectionString.replace(/[?&]sslmode=[^&]+/, '');
+// For legacy RDS connections (identified by a custom CA bundle), strip sslmode
+// from the URL and configure SSL programmatically with the CA cert.
+// For all other providers (Neon, etc.), pass the connection string as-is so
+// that URL params like sslmode=require and channel_binding=require are respected.
+const poolConfig: any = { connectionString };
 
-const poolConfig: any = {
-  connectionString: finalConnectionString
-};
-
-// Use SSL for non-local connections.
-// If an rds-ca-bundle.pem exists (legacy RDS setup), use it; otherwise rely on
-// the system CA store, which works with Neon and other standard providers.
 if (!isLocalhost) {
   const caPath = path.join(__dirname, '../../rds-ca-bundle.pem');
   if (fs.existsSync(caPath)) {
+    const parsedUrl = new URL(connectionString);
+    parsedUrl.searchParams.delete('sslmode');
+    poolConfig.connectionString = parsedUrl.toString();
     poolConfig.ssl = {
       ca: fs.readFileSync(caPath).toString(),
-      rejectUnauthorized: true
+      rejectUnauthorized: true,
     };
-  } else {
-    poolConfig.ssl = { rejectUnauthorized: true };
   }
 }
 

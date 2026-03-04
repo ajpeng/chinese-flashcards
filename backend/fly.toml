@@ -7,6 +7,9 @@ primary_region = 'iad'
   PORT = "3001"
   NODE_ENV = "production"
 
+[deploy]
+  release_command = "node_modules/.bin/prisma migrate deploy"
+
 [http_service]
   internal_port = 3001
   force_https = true
