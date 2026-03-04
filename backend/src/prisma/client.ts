@@ -23,13 +23,19 @@ const poolConfig: any = {
   connectionString: finalConnectionString
 };
 
-// Use proper SSL with RDS CA certificate
+// Use SSL for non-local connections.
+// If an rds-ca-bundle.pem exists (legacy RDS setup), use it; otherwise rely on
+// the system CA store, which works with Neon and other standard providers.
 if (!isLocalhost) {
   const caPath = path.join(__dirname, '../../rds-ca-bundle.pem');
-  poolConfig.ssl = {
-    ca: fs.readFileSync(caPath).toString(),
-    rejectUnauthorized: true
-  };
+  if (fs.existsSync(caPath)) {
+    poolConfig.ssl = {
+      ca: fs.readFileSync(caPath).toString(),
+      rejectUnauthorized: true
+    };
+  } else {
+    poolConfig.ssl = { rejectUnauthorized: true };
+  }
 }
 
 const pool = new Pool(poolConfig);

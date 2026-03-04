@@ -39,7 +39,6 @@ jobs:
     if: github.ref == 'refs/heads/main'
     permissions:
       contents: write     # gh-pages push
-      id-token: write     # AWS OIDC
 
     steps:
     - uses: actions/checkout@v4
@@ -65,114 +64,11 @@ jobs:
         token: ${{ secrets.GITHUB_TOKEN }}
         single-commit: true
 
-    - name: Configure AWS credentials
-      uses: aws-actions/configure-aws-credentials@v4
-      with:
-        role-to-assume: arn:aws:iam::426719348382:role/GitHubActionsRole
-        aws-region: us-east-1
+    - name: Setup flyctl
+      uses: superfly/flyctl-actions/setup-flyctl@master
 
-    - name: Build & push backend Docker
-      run: |
-        cd backend
-        aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 426719348382.dkr.ecr.us-east-1.amazonaws.com
-        docker buildx build --no-cache --platform linux/amd64 --push -t 426719348382.dkr.ecr.us-east-1.amazonaws.com/chinese-backend:latest .
-
-    - name: Test EC2 SSH Connection
-      uses: appleboy/ssh-action@v1.0.3
-      with:
-        host: ${{ secrets.EC2_HOST }}
-        username: ubuntu
-        key: ${{ secrets.EC2_SSH_KEY }}
-        script: |
-          echo "SSH working! 🎉"
-          whoami
-          pwd
-          docker --version || echo "Docker missing"
-          curl --version || echo "curl missing"
-
-    - name: Deploy to EC2
-      uses: appleboy/ssh-action@v1.0.3
+    - name: Deploy backend to Fly.io
+      working-directory: backend
+      run: flyctl deploy --remote-only
       env:
-        AWS_ACCESS_KEY_ID: ${{ env.AWS_ACCESS_KEY_ID }}
-        AWS_SECRET_ACCESS_KEY: ${{ env.AWS_SECRET_ACCESS_KEY }}
-        AWS_SESSION_TOKEN: ${{ env.AWS_SESSION_TOKEN }}
-      with:
-        host: ${{ secrets.EC2_HOST }}
-        username: ubuntu
-        key: ${{ secrets.EC2_SSH_KEY }}
-        envs: AWS_ACCESS_KEY_ID,AWS_SECRET_ACCESS_KEY,AWS_SESSION_TOKEN
-        script: |
-          # ── Disk cleanup FIRST (runs before anything else) ──────────────────
-          echo "💾 Disk usage before cleanup:"
-          df -h /
-
-          # Remove old backend backup archives and random tar.gz files in home
-          cd ~
-          rm -f *.tar.gz *.zip awscliv2.zip get-docker.sh github.pub || true
-          rm -rf chinese-flashcards-backend.backup.* chinese-flashcards-backend aws || true
-
-          # Remove all unused Docker images, build cache, stopped containers
-          docker stop chinese-backend || true
-          docker rm chinese-backend || true
-          docker image prune -af || true
-          docker system prune -af --volumes || true
-
-          echo "💾 Disk usage after cleanup:"
-          df -h /
-          # ────────────────────────────────────────────────────────────────────
-
-          cd ~
-          if [ -d chinese-flashcards ]; then
-            cd chinese-flashcards
-            git fetch origin
-            git reset --hard origin/main
-          else
-            git clone https://github.com/ajpeng/chinese-flashcards.git
-            cd chinese-flashcards
-          fi
-
-          # Configure nginx
-          sudo cp nginx/api.ajpeng.ca /etc/nginx/sites-available/
-          sudo ln -sf /etc/nginx/sites-available/api.ajpeng.ca /etc/nginx/sites-enabled/
-
-          # Install certbot if not already installed
-          if ! command -v certbot &> /dev/null; then
-            sudo apt update
-            sudo apt install -y certbot python3-certbot-nginx
-          fi
-
-          # Get/renew SSL certificate (non-interactive)
-          sudo certbot --nginx -d api.ajpeng.ca --non-interactive --agree-tos --email ${{ secrets.CERTBOT_EMAIL }} --redirect || echo "Certbot failed, continuing with HTTP"
-
-          # Start/reload nginx
-          sudo systemctl enable nginx
-          sudo systemctl start nginx || sudo systemctl reload nginx
-
-          # Log into ECR on EC2 so docker pull is authorised
-          aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 426719348382.dkr.ecr.us-east-1.amazonaws.com
-
-          # Deploy backend container
-          docker pull 426719348382.dkr.ecr.us-east-1.amazonaws.com/chinese-backend:latest
-          docker run -d \
-            --name chinese-backend \
-            -p 3001:3001 \
-            -e DATABASE_URL="${{ secrets.DATABASE_URL }}" \
-            -e JWT_SECRET="${{ secrets.JWT_SECRET }}" \
-            -e FRONTEND_URL="${{ secrets.FRONTEND_URL }}" \
-            -e PATREON_CLIENT_ID="${{ secrets.PATREON_CLIENT_ID }}" \
-            -e PATREON_CLIENT_SECRET="${{ secrets.PATREON_CLIENT_SECRET }}" \
-            -e PATREON_REDIRECT_URI="${{ secrets.PATREON_REDIRECT_URI }}" \
-            -e AZURE_SPEECH_KEY="${{ secrets.AZURE_SPEECH_KEY }}" \
-            -e AZURE_SPEECH_REGION="${{ secrets.AZURE_SPEECH_REGION }}" \
-            -e NODE_ENV=production \
-            -e PORT=3001 \
-            --restart unless-stopped \
-            426719348382.dkr.ecr.us-east-1.amazonaws.com/chinese-backend:latest
-
-          # Wait for backend to be ready
-          sleep 5
-          curl -f http://localhost:3001/health || echo "Health check failed"
-
-          # Run database migrations
-          echo "🗄️ Running migrations..."
-          docker exec chinese-backend ./node_modules/.bin/prisma migrate deploy
+        FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}

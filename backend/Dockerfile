@@ -33,7 +33,6 @@ COPY --from=builder /app/src/data/cedict.json ./dist/data/
 COPY --from=builder /app/src/data/hsk-words.json ./dist/data/
 COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/prisma.config.ts ./
-COPY --from=builder /app/rds-ca-bundle.pem ./
 COPY --from=builder /app/package*.json ./
 EXPOSE 3001
 CMD ["node", "dist/bin/www.js"]
