@@ -201,7 +201,7 @@ export default function Subtitles(): React.ReactElement {
         Subtitle Generator
       </h2>
       <p style={{ color: 'var(--muted-color)', marginBottom: 28, fontSize: 13 }}>
-        Upload an audio or video file and get a <code>.srt</code> subtitle file back — ready to load into asbplayer.
+        Upload an audio or video file and get a <code>.srt</code> subtitle file back.
         Processing happens in the background; you can leave and come back.
       </p>
 
@@ -316,6 +316,18 @@ export default function Subtitles(): React.ReactElement {
                     <div style={{ fontSize: 12, color: 'var(--muted-color)', marginTop: 2 }}>
                       {LANGUAGES.find(l => l.value === job.language)?.label ?? job.language} · {timeAgo(job.createdAt)}
                     </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>
+                      <code style={{ fontSize: 11, color: 'var(--muted-color)', fontFamily: 'monospace' }}>
+                        {job.jobId}
+                      </code>
+                      <button
+                        onClick={() => navigator.clipboard.writeText(job.jobId)}
+                        title="Copy job ID"
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--muted-color)', fontSize: 12, padding: '0 2px', lineHeight: 1 }}
+                      >
+                        📋
+                      </button>
+                    </div>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
                     <span style={{
@@ -336,14 +348,12 @@ export default function Subtitles(): React.ReactElement {
                   </div>
                 </div>
 
-                {/* Processing spinner */}
                 {job.status === 'processing' && (
                   <div style={{ fontSize: 12, color: 'var(--muted-color)' }}>
                     Transcribing audio… this may take a few minutes for longer files.
                   </div>
                 )}
 
-                {/* Done: download button */}
                 {job.status === 'done' && job.srtContent && (
                   <button
                     onClick={() => downloadSrt(job.filename, job.srtContent!)}
@@ -357,17 +367,12 @@ export default function Subtitles(): React.ReactElement {
                   </button>
                 )}
 
-                {/* Failed: error message */}
                 {job.status === 'failed' && job.error && (
                   <div style={{ fontSize: 12, color: 'rgb(239,68,68)' }}>{job.error}</div>
                 )}
               </div>
             ))}
           </div>
-
-          <p style={{ marginTop: 14, fontSize: 12, color: 'var(--muted-color)' }}>
-            In asbplayer, open the video then drag-and-drop the <code>.srt</code> file onto the player, or use <strong>Load subtitles</strong> from the menu.
-          </p>
         </div>
       )}
 

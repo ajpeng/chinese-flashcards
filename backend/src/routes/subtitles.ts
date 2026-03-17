@@ -1,11 +1,15 @@
 import { Router, Request, Response } from 'express';
 import multer from 'multer';
 import * as sdk from 'microsoft-cognitiveservices-speech-sdk';
+import { execFile } from 'child_process';
+import { promisify } from 'util';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
 import prisma from '../prisma/client';
 import logger from '../utils/logger';
+
+const execFileAsync = promisify(execFile);
 
 const router = Router();
 
@@ -40,22 +44,28 @@ interface Segment { text: string; offset: number; duration: number; }
 async function transcribeToSrt(filePath: string, language: string): Promise<string> {
   if (!AZURE_SPEECH_KEY) throw new Error('Azure Speech service not configured');
 
-  // Azure STT works best with WAV. For other formats, use a push stream approach.
+  // Always convert to 16 kHz mono WAV via ffmpeg before passing to Azure.
+  // Without this, compressed formats (MP3, M4A, etc.) are fed as raw bytes and
+  // Azure interprets them as PCM audio — producing garbage / no recognitions.
+  const wavPath = filePath + '_converted.wav';
+  try {
+    await execFileAsync('ffmpeg', [
+      '-y', '-i', filePath,
+      '-ar', '16000', '-ac', '1', '-f', 'wav',
+      wavPath,
+    ], { timeout: 300_000 });
+  } catch (err: any) {
+    throw new Error(`Audio conversion failed: ${err.message}`);
+  }
+
   const speechConfig = sdk.SpeechConfig.fromSubscription(AZURE_SPEECH_KEY, AZURE_SPEECH_REGION);
   speechConfig.speechRecognitionLanguage = language;
 
   let audioConfig: sdk.AudioConfig;
-  const fileBuffer = fs.readFileSync(filePath);
-
-  if (filePath.endsWith('.wav')) {
-    audioConfig = sdk.AudioConfig.fromWavFileInput(fileBuffer);
-  } else {
-    // Push stream for non-WAV formats
-    const pushStream = sdk.AudioInputStream.createPushStream();
-    const arrayBuffer = fileBuffer.buffer.slice(fileBuffer.byteOffset, fileBuffer.byteOffset + fileBuffer.byteLength);
-    pushStream.write(arrayBuffer);
-    pushStream.close();
-    audioConfig = sdk.AudioConfig.fromStreamInput(pushStream);
+  try {
+    audioConfig = sdk.AudioConfig.fromWavFileInput(fs.readFileSync(wavPath));
+  } finally {
+    try { fs.unlinkSync(wavPath); } catch { /* ignore */ }
   }
 
   const recognizer = new sdk.SpeechRecognizer(speechConfig, audioConfig);
