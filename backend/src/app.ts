@@ -17,7 +17,7 @@ import srsRouter from './routes/srs';
 import ttsRouter from './routes/tts';
 import sttRouter from './routes/stt';
 import wordsRouter from './routes/words';
-import subtitlesRouter from './routes/subtitles';
+import subtitlesRouter, { reconcileStaleSubtitleJobs } from './routes/subtitles';
 import pool from './db';
 import { dictionaryService } from './services/dictionary.service';
 import { segmentationService } from './services/segmentation.service';
@@ -31,6 +31,7 @@ app.set('trust proxy', 1);
   try {
     await dictionaryService.initialize();
     await segmentationService.initialize();
+    await reconcileStaleSubtitleJobs();
   } catch (error) {
     logger.error({ err: error }, 'Failed to initialize services');
     process.exit(1);

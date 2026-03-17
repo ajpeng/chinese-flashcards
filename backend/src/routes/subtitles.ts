@@ -1,9 +1,10 @@
 import { Router, Request, Response } from 'express';
 import multer from 'multer';
-import * as sdk from 'microsoft-cognitiveservices-speech-sdk';
+import OpenAI from 'openai';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
 import fs from 'fs';
+import path from 'path';
 import prisma from '../prisma/client';
 import logger from '../utils/logger';
 
@@ -11,14 +12,16 @@ const execFileAsync = promisify(execFile);
 
 const router = Router();
 
-const AZURE_SPEECH_KEY = process.env.AZURE_SPEECH_KEY;
-const AZURE_SPEECH_REGION = process.env.AZURE_SPEECH_REGION || 'eastus';
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+
+// Whisper hard limit is 25 MB. Target 23 MB chunks to stay safely under.
+const CHUNK_SIZE_BYTES = 23 * 1024 * 1024;
 
 const upload = multer({
   dest: 'uploads/',
   limits: { fileSize: 500 * 1024 * 1024 }, // 500 MB
   fileFilter: (_req, file, cb) => {
-    const allowed = ['audio/wav', 'audio/mpeg', 'audio/mp4', 'audio/m4a', 'audio/flac', 'audio/ogg', 'video/mp4'];
+    const allowed = ['audio/wav', 'audio/mpeg', 'audio/mp4', 'audio/m4a', 'audio/flac', 'audio/ogg', 'video/mp4', 'audio/x-m4a'];
     if (allowed.includes(file.mimetype)) {
       cb(null, true);
     } else {
@@ -27,9 +30,31 @@ const upload = multer({
   },
 });
 
-// Convert Azure 100ns ticks → SRT timestamp HH:MM:SS,mmm
-function ticksToSrt(ticks: number): string {
-  const ms = Math.floor(ticks / 10_000);
+// Get total audio duration in seconds via ffprobe
+async function getAudioDurationSecs(filePath: string): Promise<number> {
+  try {
+    const { stdout } = await execFileAsync('ffprobe', [
+      '-v', 'error',
+      '-show_entries', 'format=duration',
+      '-of', 'default=noprint_wrappers=1:nokey=1',
+      filePath,
+    ], { timeout: 30_000 });
+    const secs = parseFloat(stdout.trim());
+    return isNaN(secs) ? 0 : secs;
+  } catch {
+    return 0;
+  }
+}
+
+// Parse SRT timestamp "HH:MM:SS,mmm" → total milliseconds
+function srtToMs(ts: string): number {
+  const [hms, ms] = ts.split(',');
+  const [h, m, s] = hms.split(':').map(Number);
+  return h * 3_600_000 + m * 60_000 + s * 1_000 + Number(ms);
+}
+
+// Total milliseconds → SRT timestamp "HH:MM:SS,mmm"
+function msToSrt(ms: number): string {
   const h = Math.floor(ms / 3_600_000);
   const m = Math.floor((ms % 3_600_000) / 60_000);
   const s = Math.floor((ms % 60_000) / 1_000);
@@ -37,91 +62,110 @@ function ticksToSrt(ticks: number): string {
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')},${String(millis).padStart(3, '0')}`;
 }
 
-// Get total audio duration in ms via ffprobe
-async function getAudioDurationMs(wavPath: string): Promise<number> {
-  try {
-    const { stdout } = await execFileAsync('ffprobe', [
-      '-v', 'error',
-      '-show_entries', 'format=duration',
-      '-of', 'default=noprint_wrappers=1:nokey=1',
-      wavPath,
-    ], { timeout: 30_000 });
-    const secs = parseFloat(stdout.trim());
-    return isNaN(secs) ? 0 : Math.round(secs * 1_000);
-  } catch {
-    return 0;
+// Shift all timestamps in an SRT string by offsetMs and renumber blocks from startIndex
+function shiftSrt(srt: string, offsetMs: number, startIndex: number): { shifted: string; count: number } {
+  const blocks = srt.trim().split(/\n\n+/);
+  let idx = startIndex;
+  const parts: string[] = [];
+
+  for (const block of blocks) {
+    const lines = block.trim().split('\n');
+    const tsLineIdx = lines.findIndex(l => l.includes(' --> '));
+    if (tsLineIdx === -1) continue;
+
+    const [start, end] = lines[tsLineIdx].split(' --> ');
+    const newStart = msToSrt(srtToMs(start.trim()) + offsetMs);
+    const newEnd   = msToSrt(srtToMs(end.trim())   + offsetMs);
+    const textLines = lines.slice(tsLineIdx + 1).join('\n');
+
+    parts.push(`${idx++}\n${newStart} --> ${newEnd}\n${textLines}`);
   }
+
+  return { shifted: parts.join('\n\n'), count: idx - startIndex };
 }
 
-interface Segment { text: string; offset: number; duration: number; }
-
 async function transcribeToSrt(filePath: string, language: string, jobId: string): Promise<string> {
-  if (!AZURE_SPEECH_KEY) throw new Error('Azure Speech service not configured');
+  if (!OPENAI_API_KEY) throw new Error('OpenAI API key not configured');
 
-  // Convert to 16 kHz mono WAV — required for Azure STT
-  const wavPath = filePath + '_converted.wav';
-  try {
+  const openai = new OpenAI({ apiKey: OPENAI_API_KEY });
+
+  const totalSecs = await getAudioDurationSecs(filePath);
+  if (totalSecs > 0) {
+    await prisma.subtitleJob.update({ where: { id: jobId }, data: { durationMs: Math.round(totalSecs * 1_000) } });
+  }
+
+  // Build chunk file paths. We re-encode to MP3 at 64 kbps (~0.48 MB/min) so a
+  // 23 MB chunk holds ~48 minutes — most uploads need only a single chunk.
+  const chunkPaths: string[] = [];
+
+  const fileStat = fs.statSync(filePath);
+
+  if (fileStat.size <= CHUNK_SIZE_BYTES) {
+    // Single chunk — convert to compact MP3
+    const mp3Path = filePath + '_chunk000.mp3';
     await execFileAsync('ffmpeg', [
       '-y', '-i', filePath,
-      '-ar', '16000', '-ac', '1', '-f', 'wav',
-      wavPath,
+      '-ar', '16000', '-ac', '1', '-b:a', '64k',
+      mp3Path,
     ], { timeout: 300_000 });
-  } catch (err: any) {
-    throw new Error(`Audio conversion failed: ${err.message}`);
-  }
+    chunkPaths.push(mp3Path);
+  } else {
+    // Split into time-based segments of ~45 min each
+    const segmentSecs = Math.floor((CHUNK_SIZE_BYTES * 8) / 64_000);
+    const segmentPattern = filePath + '_chunk%03d.mp3';
+    await execFileAsync('ffmpeg', [
+      '-y', '-i', filePath,
+      '-ar', '16000', '-ac', '1', '-b:a', '64k',
+      '-f', 'segment', '-segment_time', String(segmentSecs),
+      '-reset_timestamps', '1',
+      segmentPattern,
+    ], { timeout: 600_000 });
 
-  // Get total duration so we can track progress percentage
-  const durationMs = await getAudioDurationMs(wavPath);
-  if (durationMs > 0) {
-    await prisma.subtitleJob.update({ where: { id: jobId }, data: { durationMs } });
-  }
-
-  const speechConfig = sdk.SpeechConfig.fromSubscription(AZURE_SPEECH_KEY, AZURE_SPEECH_REGION);
-  speechConfig.speechRecognitionLanguage = language;
-
-  let audioConfig: sdk.AudioConfig;
-  try {
-    audioConfig = sdk.AudioConfig.fromWavFileInput(fs.readFileSync(wavPath));
-  } finally {
-    try { fs.unlinkSync(wavPath); } catch { /* ignore */ }
-  }
-
-  const recognizer = new sdk.SpeechRecognizer(speechConfig, audioConfig);
-  const segments: Segment[] = [];
-  let lastWrittenPct = 0;
-
-  recognizer.recognized = (_sender, e) => {
-    if (e.result.reason === sdk.ResultReason.RecognizedSpeech && e.result.text.trim()) {
-      segments.push({ text: e.result.text.trim(), offset: e.result.offset, duration: e.result.duration });
-
-      // Write progress to DB whenever it moves by ≥5%, capped at 99 until fully done
-      if (durationMs > 0) {
-        const offsetMs = Math.floor(e.result.offset / 10_000);
-        const pct = Math.min(99, Math.round((offsetMs / durationMs) * 100));
-        if (pct >= lastWrittenPct + 5) {
-          lastWrittenPct = pct;
-          prisma.subtitleJob.update({ where: { id: jobId }, data: { progressPct: pct } }).catch(() => {});
-        }
-      }
+    for (let i = 0; ; i++) {
+      const p = filePath + `_chunk${String(i).padStart(3, '0')}.mp3`;
+      if (!fs.existsSync(p)) break;
+      chunkPaths.push(p);
     }
-  };
+  }
 
-  await new Promise<void>((resolve, reject) => {
-    recognizer.sessionStopped = () => resolve();
-    recognizer.canceled = (_sender, e) => {
-      if (e.reason === sdk.CancellationReason.Error) reject(new Error(e.errorDetails));
-      else resolve();
-    };
-    recognizer.startContinuousRecognitionAsync(() => {}, (err) => reject(new Error(err)));
-  });
+  if (chunkPaths.length === 0) throw new Error('Audio conversion produced no output chunks.');
 
-  recognizer.close();
+  const totalChunks = chunkPaths.length;
+  const secsPerChunk = totalSecs > 0 ? totalSecs / totalChunks : 0;
+  logger.info({ jobId, totalChunks }, 'Starting Whisper transcription');
 
-  if (segments.length === 0) throw new Error('No speech recognised — check the audio has clear speech in the selected language.');
+  const srtParts: string[] = [];
+  let globalIndex = 1;
 
-  return segments
-    .map((seg, i) => `${i + 1}\n${ticksToSrt(seg.offset)} --> ${ticksToSrt(seg.offset + seg.duration)}\n${seg.text}`)
-    .join('\n\n');
+  for (let i = 0; i < totalChunks; i++) {
+    const chunkPath = chunkPaths[i];
+    try {
+      const fileStream = fs.createReadStream(chunkPath);
+      // Cast required because the SDK types expect a specific File shape
+      const srtText: string = await (openai.audio.transcriptions.create as Function)({
+        file: Object.assign(fileStream, { name: path.basename(chunkPath) }),
+        model: 'whisper-1',
+        language: language.split('-')[0], // Whisper uses ISO-639-1: 'zh', 'en', 'ja', 'ko'
+        response_format: 'srt',
+        temperature: 0,
+      });
+
+      const offsetMs = Math.round(i * secsPerChunk * 1_000);
+      const { shifted, count } = shiftSrt(srtText, offsetMs, globalIndex);
+      globalIndex += count;
+      if (shifted) srtParts.push(shifted);
+
+      // Progress: each completed chunk advances proportionally, capped at 99 until fully done
+      const pct = Math.min(99, Math.round(((i + 1) / totalChunks) * 100));
+      await prisma.subtitleJob.update({ where: { id: jobId }, data: { progressPct: pct } });
+    } finally {
+      try { fs.unlinkSync(chunkPath); } catch { /* ignore */ }
+    }
+  }
+
+  if (srtParts.length === 0) throw new Error('No speech recognised — check the audio has clear speech in the selected language.');
+
+  return srtParts.join('\n\n');
 }
 
 // Run transcription in the background, updating the job record when done/failed.
@@ -144,10 +188,26 @@ async function processJobInBackground(jobId: string, filePath: string, language:
   }
 }
 
+// On startup: mark any jobs that were left in "processing" as failed
+// (the upload file is gone after a restart, so they can never complete)
+export async function reconcileStaleSubtitleJobs(): Promise<void> {
+  try {
+    const { count } = await prisma.subtitleJob.updateMany({
+      where: { status: 'processing' },
+      data: { status: 'failed', error: 'Server restarted while job was processing. Please re-upload the file.' },
+    });
+    if (count > 0) {
+      logger.warn({ count }, 'Marked stale subtitle jobs as failed on startup');
+    }
+  } catch (err) {
+    logger.error({ err }, 'Failed to reconcile stale subtitle jobs');
+  }
+}
+
 // POST /api/subtitles/upload
 router.post('/upload', upload.single('audio'), async (req: Request, res: Response) => {
-  if (!AZURE_SPEECH_KEY) {
-    res.status(500).json({ error: 'Azure Speech service not configured on this server.' });
+  if (!OPENAI_API_KEY) {
+    res.status(500).json({ error: 'OpenAI API key not configured on this server.' });
     return;
   }
   if (!req.file) {
