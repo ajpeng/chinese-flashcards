@@ -1,14 +1,84 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 
 const API_URL = (import.meta as any).env.VITE_API_URL || 'https://api.ajpeng.ca';
+const STORAGE_KEY = 'subtitle_jobs';
+const POLL_INTERVAL_MS = 4_000;
 
 const LANGUAGES = [
-  { value: 'zh-CN', label: 'Chinese (Simplified) — zh-CN' },
-  { value: 'zh-TW', label: 'Chinese (Traditional) — zh-TW' },
-  { value: 'en-US', label: 'English — en-US' },
-  { value: 'ja-JP', label: 'Japanese — ja-JP' },
-  { value: 'ko-KR', label: 'Korean — ko-KR' },
+  { value: 'zh-CN', label: 'Chinese Simplified (zh-CN)' },
+  { value: 'zh-TW', label: 'Chinese Traditional (zh-TW)' },
+  { value: 'en-US', label: 'English (en-US)' },
+  { value: 'ja-JP', label: 'Japanese (ja-JP)' },
+  { value: 'ko-KR', label: 'Korean (ko-KR)' },
 ];
+
+type JobStatus = 'processing' | 'done' | 'failed';
+
+interface Job {
+  jobId: string;
+  filename: string;
+  language: string;
+  status: JobStatus;
+  srtContent?: string;
+  error?: string;
+  createdAt: string;
+}
+
+function loadJobs(): Job[] {
+  try {
+    return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+  } catch {
+    return [];
+  }
+}
+
+function saveJobs(jobs: Job[]) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(jobs));
+}
+
+function downloadSrt(filename: string, srt: string) {
+  const blob = new Blob([srt], { type: 'text/plain;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename.replace(/\.[^.]+$/, '') + '.srt';
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function timeAgo(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime();
+  const mins = Math.floor(diff / 60_000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  return `${Math.floor(hrs / 24)}d ago`;
+}
+
+const statusColor: Record<JobStatus, string> = {
+  processing: 'rgba(245,158,11,0.85)',
+  done: 'rgb(16,185,129)',
+  failed: 'rgb(239,68,68)',
+};
+
+const statusBg: Record<JobStatus, string> = {
+  processing: 'rgba(245,158,11,0.08)',
+  done: 'rgba(16,185,129,0.08)',
+  failed: 'rgba(239,68,68,0.08)',
+};
+
+const statusBorder: Record<JobStatus, string> = {
+  processing: 'rgba(245,158,11,0.25)',
+  done: 'rgba(16,185,129,0.25)',
+  failed: 'rgba(239,68,68,0.25)',
+};
+
+const statusLabel: Record<JobStatus, string> = {
+  processing: '⏳ Processing…',
+  done: '✅ Done',
+  failed: '❌ Failed',
+};
 
 export default function Subtitles(): React.ReactElement {
   useEffect(() => {
@@ -16,31 +86,73 @@ export default function Subtitles(): React.ReactElement {
     return () => { document.title = 'Chinese Flashcards'; };
   }, []);
 
-  const [url, setUrl] = useState('');
+  const [jobs, setJobs] = useState<Job[]>(loadJobs);
   const [language, setLanguage] = useState('zh-CN');
-  const [status, setStatus] = useState<'idle' | 'loading' | 'done' | 'error'>('idle');
-  const [errorMsg, setErrorMsg] = useState('');
-  const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
-  const [filename, setFilename] = useState('subtitles.srt');
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState('');
+  const [dragOver, setDragOver] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const handleGenerate = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!url.trim()) return;
+  // Persist jobs to localStorage whenever they change
+  useEffect(() => { saveJobs(jobs); }, [jobs]);
 
-    // Clean up any previous object URL
-    if (downloadUrl) {
-      URL.revokeObjectURL(downloadUrl);
-      setDownloadUrl(null);
+  // Poll all processing jobs
+  const pollJobs = useCallback(async () => {
+    const processing = jobs.filter(j => j.status === 'processing');
+    if (processing.length === 0) return;
+
+    const updates = await Promise.all(
+      processing.map(async (j) => {
+        try {
+          const res = await fetch(`${API_URL}/api/subtitles/jobs/${j.jobId}`);
+          if (!res.ok) return null;
+          return await res.json();
+        } catch {
+          return null;
+        }
+      })
+    );
+
+    setJobs(prev => {
+      let changed = false;
+      const next = prev.map(j => {
+        const update = updates.find((u) => u && u.id === j.jobId);
+        if (!update || update.status === j.status) return j;
+        changed = true;
+        return {
+          ...j,
+          status: update.status as JobStatus,
+          srtContent: update.srtContent ?? j.srtContent,
+          error: update.error ?? j.error,
+        };
+      });
+      return changed ? next : prev;
+    });
+  }, [jobs]);
+
+  // Set up polling interval
+  useEffect(() => {
+    if (pollingRef.current) clearInterval(pollingRef.current);
+    const hasProcessing = jobs.some(j => j.status === 'processing');
+    if (hasProcessing) {
+      pollingRef.current = setInterval(pollJobs, POLL_INTERVAL_MS);
     }
+    return () => { if (pollingRef.current) clearInterval(pollingRef.current); };
+  }, [jobs, pollJobs]);
 
-    setStatus('loading');
-    setErrorMsg('');
+  const handleFile = async (file: File) => {
+    setUploadError('');
+    setUploading(true);
 
     try {
-      const res = await fetch(`${API_URL}/api/subtitles/generate`, {
+      const formData = new FormData();
+      formData.append('audio', file);
+      formData.append('language', language);
+
+      const res = await fetch(`${API_URL}/api/subtitles/upload`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: url.trim(), language }),
+        body: formData,
       });
 
       if (!res.ok) {
@@ -48,26 +160,39 @@ export default function Subtitles(): React.ReactElement {
         throw new Error(data.error || `Server error ${res.status}`);
       }
 
-      // Extract filename from Content-Disposition header if present
-      const disposition = res.headers.get('Content-Disposition') ?? '';
-      const match = disposition.match(/filename="?([^"]+)"?/);
-      if (match) setFilename(match[1]);
+      const { jobId } = await res.json();
 
-      const blob = await res.blob();
-      setDownloadUrl(URL.createObjectURL(blob));
-      setStatus('done');
+      const newJob: Job = {
+        jobId,
+        filename: file.name,
+        language,
+        status: 'processing',
+        createdAt: new Date().toISOString(),
+      };
+
+      setJobs(prev => [newJob, ...prev]);
     } catch (err: any) {
-      setErrorMsg(err.message || 'Something went wrong.');
-      setStatus('error');
+      setUploadError(err.message || 'Upload failed.');
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
     }
   };
 
-  const handleReset = () => {
-    if (downloadUrl) URL.revokeObjectURL(downloadUrl);
-    setDownloadUrl(null);
-    setStatus('idle');
-    setErrorMsg('');
-    setUrl('');
+  const handleFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) handleFile(file);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setDragOver(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file) handleFile(file);
+  };
+
+  const removeJob = (jobId: string) => {
+    setJobs(prev => prev.filter(j => j.jobId !== jobId));
   };
 
   return (
@@ -76,193 +201,176 @@ export default function Subtitles(): React.ReactElement {
         Subtitle Generator
       </h2>
       <p style={{ color: 'var(--muted-color)', marginBottom: 28, fontSize: 13 }}>
-        Paste a YouTube URL and generate an <code>.srt</code> subtitle file using Azure speech recognition — ready to load into asbplayer.
+        Upload an audio or video file and get a <code>.srt</code> subtitle file back — ready to load into asbplayer.
+        Processing happens in the background; you can leave and come back.
       </p>
 
-      <form onSubmit={handleGenerate}>
-        <div style={{
-          padding: '20px',
-          border: '1px solid var(--border-color)',
-          borderRadius: 12,
-          background: 'var(--card-bg)',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 16,
-        }}>
-          {/* URL input */}
-          <div>
-            <label style={{ display: 'block', fontSize: 12, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--muted-color)', marginBottom: 8 }}>
-              YouTube URL
-            </label>
-            <input
-              type="url"
-              value={url}
-              onChange={e => setUrl(e.target.value)}
-              placeholder="https://www.youtube.com/watch?v=..."
-              required
-              disabled={status === 'loading'}
-              style={{
-                width: '100%',
-                padding: '10px 12px',
-                borderRadius: 8,
-                border: '1px solid var(--border-color)',
-                background: 'var(--bg-secondary, rgba(128,128,128,0.06))',
-                color: 'inherit',
-                fontSize: 14,
-                fontFamily: 'inherit',
-                boxSizing: 'border-box',
-                outline: 'none',
-              }}
-            />
-          </div>
-
-          {/* Language selector */}
-          <div>
-            <label style={{ display: 'block', fontSize: 12, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--muted-color)', marginBottom: 8 }}>
-              Spoken Language
-            </label>
-            <select
-              value={language}
-              onChange={e => setLanguage(e.target.value)}
-              disabled={status === 'loading'}
-              style={{
-                width: '100%',
-                padding: '10px 12px',
-                borderRadius: 8,
-                border: '1px solid var(--border-color)',
-                background: 'var(--bg-secondary, rgba(128,128,128,0.06))',
-                color: 'inherit',
-                fontSize: 14,
-                fontFamily: 'inherit',
-                boxSizing: 'border-box',
-                cursor: 'pointer',
-              }}
-            >
-              {LANGUAGES.map(l => (
-                <option key={l.value} value={l.value}>{l.label}</option>
-              ))}
-            </select>
-          </div>
-
-          {/* Submit */}
-          <button
-            type="submit"
-            disabled={status === 'loading' || !url.trim()}
+      {/* Upload card */}
+      <div style={{ padding: '20px', border: '1px solid var(--border-color)', borderRadius: 12, background: 'var(--card-bg)', marginBottom: 24 }}>
+        {/* Language selector */}
+        <div style={{ marginBottom: 16 }}>
+          <label style={{ display: 'block', fontSize: 12, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--muted-color)', marginBottom: 8 }}>
+            Spoken Language
+          </label>
+          <select
+            value={language}
+            onChange={e => setLanguage(e.target.value)}
+            disabled={uploading}
             style={{
-              padding: '11px 20px',
-              borderRadius: 8,
-              border: 'none',
-              background: status === 'loading'
-                ? 'rgba(59,130,246,0.4)'
-                : 'rgba(59,130,246,0.85)',
-              color: '#fff',
-              fontSize: 14,
-              fontWeight: 600,
-              cursor: status === 'loading' ? 'not-allowed' : 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: 8,
-              transition: 'background 0.15s',
+              width: '100%', padding: '10px 12px', borderRadius: 8,
+              border: '1px solid var(--border-color)',
+              background: 'var(--bg-secondary, rgba(128,128,128,0.06))',
+              color: 'inherit', fontSize: 14, fontFamily: 'inherit', cursor: 'pointer',
             }}
           >
-            {status === 'loading' ? (
-              <>
-                <span style={{
-                  width: 14, height: 14, border: '2px solid rgba(255,255,255,0.4)',
-                  borderTopColor: '#fff', borderRadius: '50%',
-                  display: 'inline-block', animation: 'spin 0.75s linear infinite',
-                }} />
-                Generating subtitles…
-              </>
-            ) : 'Generate .srt'}
-          </button>
+            {LANGUAGES.map(l => <option key={l.value} value={l.value}>{l.label}</option>)}
+          </select>
+        </div>
 
-          {status === 'loading' && (
-            <p style={{ fontSize: 12, color: 'var(--muted-color)', textAlign: 'center', margin: 0 }}>
-              Downloading audio and transcribing — this may take a minute or two for longer videos.
-            </p>
+        {/* Drop zone */}
+        <div
+          onDragOver={e => { e.preventDefault(); setDragOver(true); }}
+          onDragLeave={() => setDragOver(false)}
+          onDrop={handleDrop}
+          onClick={() => !uploading && fileInputRef.current?.click()}
+          style={{
+            border: `2px dashed ${dragOver ? 'rgba(59,130,246,0.7)' : 'var(--border-color)'}`,
+            borderRadius: 10,
+            padding: '32px 20px',
+            textAlign: 'center',
+            cursor: uploading ? 'not-allowed' : 'pointer',
+            background: dragOver ? 'rgba(59,130,246,0.05)' : 'transparent',
+            transition: 'border-color 0.15s, background 0.15s',
+          }}
+        >
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="audio/*,video/mp4"
+            onChange={handleFileInput}
+            style={{ display: 'none' }}
+          />
+          {uploading ? (
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
+              <span style={{
+                width: 24, height: 24, border: '3px solid rgba(59,130,246,0.3)',
+                borderTopColor: 'rgba(59,130,246,0.85)', borderRadius: '50%',
+                display: 'inline-block', animation: 'spin 0.75s linear infinite',
+              }} />
+              <span style={{ fontSize: 14, color: 'var(--muted-color)' }}>Uploading…</span>
+            </div>
+          ) : (
+            <>
+              <div style={{ fontSize: 32, marginBottom: 8 }}>🎵</div>
+              <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>
+                Drop an audio file here, or click to browse
+              </div>
+              <div style={{ fontSize: 12, color: 'var(--muted-color)' }}>
+                WAV, MP3, M4A, FLAC, OGG, MP4 · up to 500 MB
+              </div>
+            </>
           )}
         </div>
-      </form>
 
-      {/* Error state */}
-      {status === 'error' && (
-        <div style={{
-          marginTop: 16,
-          padding: '14px 16px',
-          borderRadius: 10,
-          background: 'rgba(239,68,68,0.08)',
-          border: '1px solid rgba(239,68,68,0.3)',
-          color: 'rgb(239,68,68)',
-          fontSize: 14,
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'flex-start',
-          gap: 12,
-        }}>
-          <span>{errorMsg}</span>
-          <button onClick={handleReset} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'inherit', flexShrink: 0, fontSize: 13 }}>
-            Try again
-          </button>
-        </div>
-      )}
-
-      {/* Success state */}
-      {status === 'done' && downloadUrl && (
-        <div style={{
-          marginTop: 16,
-          padding: '18px 20px',
-          borderRadius: 12,
-          border: '1px solid rgba(16,185,129,0.3)',
-          background: 'rgba(16,185,129,0.06)',
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
-            <span style={{ fontSize: 20 }}>✅</span>
-            <span style={{ fontWeight: 600, fontSize: 15 }}>Subtitles generated!</span>
+        {uploadError && (
+          <div style={{ marginTop: 12, fontSize: 13, color: 'rgb(239,68,68)', padding: '10px 12px', borderRadius: 8, background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)' }}>
+            {uploadError}
           </div>
-          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-            <a
-              href={downloadUrl}
-              download={filename}
-              style={{
-                padding: '9px 18px',
-                borderRadius: 8,
-                background: 'rgba(16,185,129,0.85)',
-                color: '#fff',
-                fontSize: 14,
-                fontWeight: 600,
-                textDecoration: 'none',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 6,
-              }}
-            >
-              ⬇ Download {filename}
-            </a>
+        )}
+      </div>
+
+      {/* Jobs list */}
+      {jobs.length > 0 && (
+        <div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+            <span style={{ fontSize: 12, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--muted-color)' }}>
+              Recent Jobs
+            </span>
             <button
-              onClick={handleReset}
-              style={{
-                padding: '9px 18px',
-                borderRadius: 8,
-                background: 'transparent',
-                border: '1px solid var(--border-color)',
-                color: 'var(--muted-color)',
-                fontSize: 14,
-                cursor: 'pointer',
-              }}
+              onClick={() => setJobs([])}
+              style={{ fontSize: 12, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--muted-color)' }}
             >
-              Generate another
+              Clear all
             </button>
           </div>
-          <p style={{ marginTop: 12, fontSize: 12, color: 'var(--muted-color)' }}>
-            In asbplayer, open the video then drag-and-drop the <code>.srt</code> file onto the player, or use{' '}
-            <strong>Load subtitles</strong> from the asbplayer menu.
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {jobs.map(job => (
+              <div
+                key={job.jobId}
+                style={{
+                  padding: '14px 16px',
+                  borderRadius: 10,
+                  border: `1px solid ${statusBorder[job.status]}`,
+                  background: statusBg[job.status],
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 8,
+                }}
+              >
+                {/* Top row */}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontSize: 14, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {job.filename}
+                    </div>
+                    <div style={{ fontSize: 12, color: 'var(--muted-color)', marginTop: 2 }}>
+                      {LANGUAGES.find(l => l.value === job.language)?.label ?? job.language} · {timeAgo(job.createdAt)}
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+                    <span style={{
+                      fontSize: 12, fontWeight: 600, padding: '3px 10px', borderRadius: 99,
+                      color: statusColor[job.status],
+                      background: statusBg[job.status],
+                      border: `1px solid ${statusBorder[job.status]}`,
+                    }}>
+                      {statusLabel[job.status]}
+                    </span>
+                    <button
+                      onClick={() => removeJob(job.jobId)}
+                      title="Remove"
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--muted-color)', fontSize: 16, lineHeight: 1, padding: '2px 4px' }}
+                    >
+                      ×
+                    </button>
+                  </div>
+                </div>
+
+                {/* Processing spinner */}
+                {job.status === 'processing' && (
+                  <div style={{ fontSize: 12, color: 'var(--muted-color)' }}>
+                    Transcribing audio… this may take a few minutes for longer files.
+                  </div>
+                )}
+
+                {/* Done: download button */}
+                {job.status === 'done' && job.srtContent && (
+                  <button
+                    onClick={() => downloadSrt(job.filename, job.srtContent!)}
+                    style={{
+                      alignSelf: 'flex-start', padding: '7px 14px', borderRadius: 7,
+                      border: 'none', background: 'rgba(16,185,129,0.85)', color: '#fff',
+                      fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                    }}
+                  >
+                    ⬇ Download .srt
+                  </button>
+                )}
+
+                {/* Failed: error message */}
+                {job.status === 'failed' && job.error && (
+                  <div style={{ fontSize: 12, color: 'rgb(239,68,68)' }}>{job.error}</div>
+                )}
+              </div>
+            ))}
+          </div>
+
+          <p style={{ marginTop: 14, fontSize: 12, color: 'var(--muted-color)' }}>
+            In asbplayer, open the video then drag-and-drop the <code>.srt</code> file onto the player, or use <strong>Load subtitles</strong> from the menu.
           </p>
         </div>
       )}
 
-      {/* Spinner keyframes */}
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </div>
   );

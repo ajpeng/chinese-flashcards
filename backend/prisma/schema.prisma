@@ -105,6 +105,19 @@ model AiUsageLog {
   @@index([createdAt])
 }
 
+model SubtitleJob {
+  id         String   @id @default(cuid())
+  status     String   @default("processing") // "processing" | "done" | "failed"
+  filename   String   // original uploaded filename
+  language   String
+  srtContent String?  // populated when done
+  error      String?  // populated when failed
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([createdAt])
+}
+
 model TTSCache {
   id            String   @id @default(cuid())
   textHash      String   @unique // SHA-256 hash of text+voice+rate combination

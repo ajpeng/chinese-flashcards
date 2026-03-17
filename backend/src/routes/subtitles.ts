@@ -1,21 +1,32 @@
 import { Router, Request, Response } from 'express';
-import { body, validationResult } from 'express-validator';
-import { execFile } from 'child_process';
-import { promisify } from 'util';
+import multer from 'multer';
 import * as sdk from 'microsoft-cognitiveservices-speech-sdk';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
+import prisma from '../prisma/client';
 import logger from '../utils/logger';
 
-const execFileAsync = promisify(execFile);
 const router = Router();
 
 const AZURE_SPEECH_KEY = process.env.AZURE_SPEECH_KEY;
 const AZURE_SPEECH_REGION = process.env.AZURE_SPEECH_REGION || 'eastus';
 
-// Convert Azure's 100-nanosecond tick offset to SRT timestamp string HH:MM:SS,mmm
-function ticksToSrtTime(ticks: number): string {
+const upload = multer({
+  dest: 'uploads/',
+  limits: { fileSize: 500 * 1024 * 1024 }, // 500 MB
+  fileFilter: (_req, file, cb) => {
+    const allowed = ['audio/wav', 'audio/mpeg', 'audio/mp4', 'audio/m4a', 'audio/flac', 'audio/ogg', 'video/mp4'];
+    if (allowed.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error(`Unsupported file type: ${file.mimetype}`));
+    }
+  },
+});
+
+// Convert Azure 100ns ticks → SRT timestamp HH:MM:SS,mmm
+function ticksToSrt(ticks: number): string {
   const ms = Math.floor(ticks / 10_000);
   const h = Math.floor(ms / 3_600_000);
   const m = Math.floor((ms % 3_600_000) / 60_000);
@@ -24,135 +35,120 @@ function ticksToSrtTime(ticks: number): string {
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')},${String(millis).padStart(3, '0')}`;
 }
 
-interface TranscriptSegment {
-  text: string;
-  offset: number;   // 100ns ticks
-  duration: number; // 100ns ticks
-}
+interface Segment { text: string; offset: number; duration: number; }
 
-async function transcribeWav(wavPath: string, language: string): Promise<TranscriptSegment[]> {
+async function transcribeToSrt(filePath: string, language: string): Promise<string> {
   if (!AZURE_SPEECH_KEY) throw new Error('Azure Speech service not configured');
 
+  // Azure STT works best with WAV. For other formats, use a push stream approach.
   const speechConfig = sdk.SpeechConfig.fromSubscription(AZURE_SPEECH_KEY, AZURE_SPEECH_REGION);
   speechConfig.speechRecognitionLanguage = language;
 
-  const audioConfig = sdk.AudioConfig.fromWavFileInput(fs.readFileSync(wavPath));
-  const recognizer = new sdk.SpeechRecognizer(speechConfig, audioConfig);
+  let audioConfig: sdk.AudioConfig;
+  const fileBuffer = fs.readFileSync(filePath);
 
-  const segments: TranscriptSegment[] = [];
+  if (filePath.endsWith('.wav')) {
+    audioConfig = sdk.AudioConfig.fromWavFileInput(fileBuffer);
+  } else {
+    // Push stream for non-WAV formats
+    const pushStream = sdk.AudioInputStream.createPushStream();
+    const arrayBuffer = fileBuffer.buffer.slice(fileBuffer.byteOffset, fileBuffer.byteOffset + fileBuffer.byteLength);
+    pushStream.write(arrayBuffer);
+    pushStream.close();
+    audioConfig = sdk.AudioConfig.fromStreamInput(pushStream);
+  }
+
+  const recognizer = new sdk.SpeechRecognizer(speechConfig, audioConfig);
+  const segments: Segment[] = [];
 
   recognizer.recognized = (_sender, e) => {
     if (e.result.reason === sdk.ResultReason.RecognizedSpeech && e.result.text.trim()) {
-      segments.push({
-        text: e.result.text.trim(),
-        offset: e.result.offset,
-        duration: e.result.duration,
-      });
+      segments.push({ text: e.result.text.trim(), offset: e.result.offset, duration: e.result.duration });
     }
   };
 
   await new Promise<void>((resolve, reject) => {
     recognizer.sessionStopped = () => resolve();
     recognizer.canceled = (_sender, e) => {
-      if (e.reason === sdk.CancellationReason.Error) {
-        reject(new Error(e.errorDetails));
-      } else {
-        resolve();
-      }
+      if (e.reason === sdk.CancellationReason.Error) reject(new Error(e.errorDetails));
+      else resolve();
     };
-    recognizer.startContinuousRecognitionAsync(
-      () => { /* started */ },
-      (err) => reject(new Error(err)),
-    );
+    recognizer.startContinuousRecognitionAsync(() => {}, (err) => reject(new Error(err)));
   });
 
   recognizer.close();
-  return segments;
-}
 
-function buildSrt(segments: TranscriptSegment[]): string {
+  if (segments.length === 0) throw new Error('No speech recognised — check the audio has clear speech in the selected language.');
+
   return segments
-    .map((seg, i) => {
-      const start = ticksToSrtTime(seg.offset);
-      const end = ticksToSrtTime(seg.offset + seg.duration);
-      return `${i + 1}\n${start} --> ${end}\n${seg.text}`;
-    })
+    .map((seg, i) => `${i + 1}\n${ticksToSrt(seg.offset)} --> ${ticksToSrt(seg.offset + seg.duration)}\n${seg.text}`)
     .join('\n\n');
 }
 
-// POST /api/subtitles/generate
-// Downloads audio from a YouTube URL via yt-dlp, transcribes with Azure STT,
-// and returns a .srt subtitle file.
-router.post(
-  '/generate',
-  body('url').isURL({ require_protocol: true }).withMessage('A valid URL is required'),
-  body('language').optional().isString().isLength({ max: 20 }),
-  async (req: Request, res: Response) => {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      res.status(400).json({ errors: errors.array() });
-      return;
-    }
+// Run transcription in the background, updating the job record when done/failed.
+async function processJobInBackground(jobId: string, filePath: string, language: string): Promise<void> {
+  try {
+    const srt = await transcribeToSrt(filePath, language);
+    await prisma.subtitleJob.update({
+      where: { id: jobId },
+      data: { status: 'done', srtContent: srt },
+    });
+    logger.info({ jobId }, 'Subtitle job completed');
+  } catch (err: any) {
+    logger.error({ jobId, err }, 'Subtitle job failed');
+    await prisma.subtitleJob.update({
+      where: { id: jobId },
+      data: { status: 'failed', error: err.message ?? 'Unknown error' },
+    });
+  } finally {
+    try { fs.unlinkSync(filePath); } catch { /* ignore */ }
+  }
+}
 
-    if (!AZURE_SPEECH_KEY) {
-      res.status(500).json({ error: 'Azure Speech service not configured on this server.' });
-      return;
-    }
+// POST /api/subtitles/upload
+// Accepts an audio file + language, creates a SubtitleJob, kicks off background
+// transcription, and immediately returns the job ID.
+router.post('/upload', upload.single('audio'), async (req: Request, res: Response) => {
+  if (!AZURE_SPEECH_KEY) {
+    res.status(500).json({ error: 'Azure Speech service not configured on this server.' });
+    return;
+  }
 
-    const { url, language = 'zh-CN' } = req.body as { url: string; language?: string };
+  if (!req.file) {
+    res.status(400).json({ error: 'No audio file provided.' });
+    return;
+  }
 
-    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'subtitles-'));
-    const audioPath = path.join(tmpDir, 'audio.wav');
+  const language = (req.body.language as string) || 'zh-CN';
+  const filename = req.file.originalname || 'audio';
 
-    try {
-      logger.info({ url, language }, 'Downloading audio via yt-dlp');
+  // Create the job record immediately
+  const job = await prisma.subtitleJob.create({
+    data: { status: 'processing', filename, language },
+  });
 
-      // Download and convert to 16 kHz mono WAV — ideal for Azure STT
-      await execFileAsync('yt-dlp', [
-        '-x',
-        '--audio-format', 'wav',
-        '--postprocessor-args', 'ffmpeg:-ar 16000 -ac 1',
-        '-o', audioPath,
-        url,
-      ], { timeout: 300_000 }); // 5 min download limit
+  logger.info({ jobId: job.id, filename, language }, 'Subtitle job created');
 
-      if (!fs.existsSync(audioPath)) {
-        res.status(500).json({ error: 'Audio download produced no output file.' });
-        return;
-      }
+  // Kick off transcription in the background (do not await)
+  processJobInBackground(job.id, req.file.path, language).catch(() => {});
 
-      logger.info({ language }, 'Transcribing audio with Azure STT');
-      const segments = await transcribeWav(audioPath, language);
+  res.status(202).json({ jobId: job.id });
+});
 
-      if (segments.length === 0) {
-        res.status(404).json({ error: 'No speech could be recognised from the audio. The video may be silent or in an unsupported language.' });
-        return;
-      }
+// GET /api/subtitles/jobs/:id
+// Poll for job status. Returns status + srtContent (when done) or error (when failed).
+router.get('/jobs/:id', async (req: Request, res: Response) => {
+  const job = await prisma.subtitleJob.findUnique({
+    where: { id: req.params.id },
+    select: { id: true, status: true, filename: true, language: true, srtContent: true, error: true, createdAt: true },
+  });
 
-      const srt = buildSrt(segments);
+  if (!job) {
+    res.status(404).json({ error: 'Job not found.' });
+    return;
+  }
 
-      // Derive a clean filename from the URL
-      const videoId = url.match(/(?:v=|youtu\.be\/)([A-Za-z0-9_-]{11})/)?.[1] ?? 'subtitles';
-      const filename = `${videoId}.srt`;
-
-      res.setHeader('Content-Type', 'text/plain; charset=utf-8');
-      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-      res.send(srt);
-    } catch (error: any) {
-      logger.error({ err: error, url }, 'Subtitle generation failed');
-
-      if (error.code === 127 || /not found|ENOENT/i.test(error.message ?? '')) {
-        res.status(500).json({ error: 'yt-dlp is not installed on this server.' });
-      } else {
-        res.status(500).json({
-          error: 'Failed to generate subtitles.',
-          details: error.message,
-        });
-      }
-    } finally {
-      try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch { /* ignore */ }
-    }
-  },
-);
+  res.json(job);
+});
 
 export default router;
