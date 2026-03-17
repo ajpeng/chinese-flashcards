@@ -45,8 +45,6 @@ async function transcribeToSrt(filePath: string, language: string): Promise<stri
   if (!AZURE_SPEECH_KEY) throw new Error('Azure Speech service not configured');
 
   // Always convert to 16 kHz mono WAV via ffmpeg before passing to Azure.
-  // Without this, compressed formats (MP3, M4A, etc.) are fed as raw bytes and
-  // Azure interprets them as PCM audio — producing garbage / no recognitions.
   const wavPath = filePath + '_converted.wav';
   try {
     await execFileAsync('ffmpeg', [
