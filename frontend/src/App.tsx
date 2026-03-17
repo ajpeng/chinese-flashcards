@@ -7,6 +7,7 @@ import SpeechPractice from './pages/SpeechPractice'
 import Settings from './pages/Settings'
 import Flashcards from './pages/Flashcards'
 import WordDetail from './pages/WordDetail'
+import Subtitles from './pages/Subtitles'
 import { AuthProvider } from './contexts/AuthContext'
 import ProtectedRoute from './components/ProtectedRoute'
 import NavBar from './components/NavBar'
@@ -122,6 +123,7 @@ function Layout() {
             </ProtectedRoute>
           } />
           <Route path="/words/:word" element={<WordDetail />} />
+          <Route path="/subtitles" element={<Subtitles />} />
           <Route path="/health" element={<Health />} />
         </Routes>
       </main>

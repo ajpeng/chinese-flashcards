@@ -17,6 +17,7 @@ import srsRouter from './routes/srs';
 import ttsRouter from './routes/tts';
 import sttRouter from './routes/stt';
 import wordsRouter from './routes/words';
+import subtitlesRouter from './routes/subtitles';
 import pool from './db';
 import { dictionaryService } from './services/dictionary.service';
 import { segmentationService } from './services/segmentation.service';
@@ -83,6 +84,7 @@ app.use('/api/segmentation', segmentationRouter);
 app.use('/api/tts', ttsRouter);
 app.use('/api/stt', sttRouter);
 app.use('/api/words', wordsRouter);
+app.use('/api/subtitles', subtitlesRouter);
 
 // catch 404 and forward to error handler
 app.use((req: Request, res: Response, next: NextFunction) => {

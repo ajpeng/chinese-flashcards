@@ -72,6 +72,9 @@ function NavBar() {
       <Link to="/speech-practice" style={navLinkStyle('/speech-practice')}>
         <span style={{ fontSize: 17 }}>🎤</span> Speech Practice
       </Link>
+      <Link to="/subtitles" style={navLinkStyle('/subtitles')}>
+        <span style={{ fontSize: 17 }}>💬</span> Subtitles
+      </Link>
       {user && (
         <Link to="/new" style={navLinkStyle('/new')}>
           <span style={{ fontSize: 17 }}>✏️</span> New Article

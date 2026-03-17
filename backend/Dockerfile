@@ -23,6 +23,12 @@ RUN npx prisma generate
 # runner
 FROM node:20-alpine AS runner
 WORKDIR /app
+
+# Install ffmpeg (for audio conversion) and yt-dlp (standalone binary, no Python needed)
+RUN apk add --no-cache ffmpeg curl && \
+    curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp \
+         -o /usr/local/bin/yt-dlp && \
+    chmod +x /usr/local/bin/yt-dlp
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/views ./views

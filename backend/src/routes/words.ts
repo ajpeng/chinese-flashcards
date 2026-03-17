@@ -210,10 +210,6 @@ router.get('/detail', async (req: Request, res: Response) => {
     .slice(0, 20);
 
   // ── 3. Example sentences ───────────────────────────────────────────────────
-  // Use the raw pg pool with a parameterised LIKE query backed by the pg_trgm
-  // GIN index. We search both the simplified and traditional columns so that
-  // querying with a traditional character (e.g. 奧 U+5967) still matches
-  // sentences stored in simplified form (奥 U+5965).
   const { rows: exampleRows } = await pool.query<{
     simplified: string; pinyin: string; english: string;
   }>(
