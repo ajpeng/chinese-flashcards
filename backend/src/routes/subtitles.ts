@@ -4,8 +4,6 @@ import * as sdk from 'microsoft-cognitiveservices-speech-sdk';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
 import fs from 'fs';
-import path from 'path';
-import os from 'os';
 import prisma from '../prisma/client';
 import logger from '../utils/logger';
 
@@ -39,12 +37,28 @@ function ticksToSrt(ticks: number): string {
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')},${String(millis).padStart(3, '0')}`;
 }
 
+// Get total audio duration in ms via ffprobe
+async function getAudioDurationMs(wavPath: string): Promise<number> {
+  try {
+    const { stdout } = await execFileAsync('ffprobe', [
+      '-v', 'error',
+      '-show_entries', 'format=duration',
+      '-of', 'default=noprint_wrappers=1:nokey=1',
+      wavPath,
+    ], { timeout: 30_000 });
+    const secs = parseFloat(stdout.trim());
+    return isNaN(secs) ? 0 : Math.round(secs * 1_000);
+  } catch {
+    return 0;
+  }
+}
+
 interface Segment { text: string; offset: number; duration: number; }
 
-async function transcribeToSrt(filePath: string, language: string): Promise<string> {
+async function transcribeToSrt(filePath: string, language: string, jobId: string): Promise<string> {
   if (!AZURE_SPEECH_KEY) throw new Error('Azure Speech service not configured');
 
-  // Always convert to 16 kHz mono WAV via ffmpeg before passing to Azure.
+  // Convert to 16 kHz mono WAV — required for Azure STT
   const wavPath = filePath + '_converted.wav';
   try {
     await execFileAsync('ffmpeg', [
@@ -54,6 +68,12 @@ async function transcribeToSrt(filePath: string, language: string): Promise<stri
     ], { timeout: 300_000 });
   } catch (err: any) {
     throw new Error(`Audio conversion failed: ${err.message}`);
+  }
+
+  // Get total duration so we can track progress percentage
+  const durationMs = await getAudioDurationMs(wavPath);
+  if (durationMs > 0) {
+    await prisma.subtitleJob.update({ where: { id: jobId }, data: { durationMs } });
   }
 
   const speechConfig = sdk.SpeechConfig.fromSubscription(AZURE_SPEECH_KEY, AZURE_SPEECH_REGION);
@@ -68,10 +88,21 @@ async function transcribeToSrt(filePath: string, language: string): Promise<stri
 
   const recognizer = new sdk.SpeechRecognizer(speechConfig, audioConfig);
   const segments: Segment[] = [];
+  let lastWrittenPct = 0;
 
   recognizer.recognized = (_sender, e) => {
     if (e.result.reason === sdk.ResultReason.RecognizedSpeech && e.result.text.trim()) {
       segments.push({ text: e.result.text.trim(), offset: e.result.offset, duration: e.result.duration });
+
+      // Write progress to DB whenever it moves by ≥5%, capped at 99 until fully done
+      if (durationMs > 0) {
+        const offsetMs = Math.floor(e.result.offset / 10_000);
+        const pct = Math.min(99, Math.round((offsetMs / durationMs) * 100));
+        if (pct >= lastWrittenPct + 5) {
+          lastWrittenPct = pct;
+          prisma.subtitleJob.update({ where: { id: jobId }, data: { progressPct: pct } }).catch(() => {});
+        }
+      }
     }
   };
 
@@ -96,10 +127,10 @@ async function transcribeToSrt(filePath: string, language: string): Promise<stri
 // Run transcription in the background, updating the job record when done/failed.
 async function processJobInBackground(jobId: string, filePath: string, language: string): Promise<void> {
   try {
-    const srt = await transcribeToSrt(filePath, language);
+    const srt = await transcribeToSrt(filePath, language, jobId);
     await prisma.subtitleJob.update({
       where: { id: jobId },
-      data: { status: 'done', srtContent: srt },
+      data: { status: 'done', srtContent: srt, progressPct: 100 },
     });
     logger.info({ jobId }, 'Subtitle job completed');
   } catch (err: any) {
@@ -114,14 +145,11 @@ async function processJobInBackground(jobId: string, filePath: string, language:
 }
 
 // POST /api/subtitles/upload
-// Accepts an audio file + language, creates a SubtitleJob, kicks off background
-// transcription, and immediately returns the job ID.
 router.post('/upload', upload.single('audio'), async (req: Request, res: Response) => {
   if (!AZURE_SPEECH_KEY) {
     res.status(500).json({ error: 'Azure Speech service not configured on this server.' });
     return;
   }
-
   if (!req.file) {
     res.status(400).json({ error: 'No audio file provided.' });
     return;
@@ -130,25 +158,21 @@ router.post('/upload', upload.single('audio'), async (req: Request, res: Respons
   const language = (req.body.language as string) || 'zh-CN';
   const filename = req.file.originalname || 'audio';
 
-  // Create the job record immediately
   const job = await prisma.subtitleJob.create({
     data: { status: 'processing', filename, language },
   });
 
   logger.info({ jobId: job.id, filename, language }, 'Subtitle job created');
-
-  // Kick off transcription in the background (do not await)
   processJobInBackground(job.id, req.file.path, language).catch(() => {});
 
   res.status(202).json({ jobId: job.id });
 });
 
 // GET /api/subtitles/jobs/:id
-// Poll for job status. Returns status + srtContent (when done) or error (when failed).
 router.get('/jobs/:id', async (req: Request, res: Response) => {
   const job = await prisma.subtitleJob.findUnique({
     where: { id: req.params.id },
-    select: { id: true, status: true, filename: true, language: true, srtContent: true, error: true, createdAt: true },
+    select: { id: true, status: true, filename: true, language: true, srtContent: true, error: true, durationMs: true, progressPct: true, createdAt: true },
   });
 
   if (!job) {

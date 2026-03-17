@@ -21,6 +21,8 @@ interface Job {
   status: JobStatus;
   srtContent?: string;
   error?: string;
+  durationMs?: number;
+  progressPct?: number;
   createdAt: string;
 }
 
@@ -44,6 +46,17 @@ function downloadSrt(filename: string, srt: string) {
   a.download = filename.replace(/\.[^.]+$/, '') + '.srt';
   a.click();
   URL.revokeObjectURL(url);
+}
+
+function calcEta(job: Job): string {
+  const pct = job.progressPct ?? 0;
+  if (pct <= 0) return '';
+  const elapsedMs = Date.now() - new Date(job.createdAt).getTime();
+  const remainingMs = (elapsedMs / pct) * (100 - pct);
+  if (remainingMs <= 0) return 'almost done';
+  const mins = Math.ceil(remainingMs / 60_000);
+  if (mins < 1) return '< 1 min left';
+  return `~${mins} min left`;
 }
 
 function timeAgo(iso: string): string {
@@ -125,6 +138,8 @@ export default function Subtitles(): React.ReactElement {
           status: update.status as JobStatus,
           srtContent: update.srtContent ?? j.srtContent,
           error: update.error ?? j.error,
+          durationMs: update.durationMs ?? j.durationMs,
+          progressPct: update.progressPct ?? j.progressPct,
         };
       });
       return changed ? next : prev;
@@ -349,8 +364,27 @@ export default function Subtitles(): React.ReactElement {
                 </div>
 
                 {job.status === 'processing' && (
-                  <div style={{ fontSize: 12, color: 'var(--muted-color)' }}>
-                    Transcribing audio… this may take a few minutes for longer files.
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    {/* Progress bar */}
+                    <div style={{ height: 6, borderRadius: 99, background: 'rgba(245,158,11,0.15)', overflow: 'hidden' }}>
+                      <div style={{
+                        height: '100%',
+                        borderRadius: 99,
+                        background: 'rgba(245,158,11,0.85)',
+                        width: `${job.progressPct ?? 0}%`,
+                        transition: 'width 1s ease',
+                        minWidth: job.progressPct ? undefined : '4%', // show a sliver even at 0%
+                      }} />
+                    </div>
+                    {/* Labels */}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: 'var(--muted-color)' }}>
+                      <span>
+                        {job.progressPct
+                          ? `${job.progressPct}% transcribed`
+                          : 'Converting audio…'}
+                      </span>
+                      <span>{calcEta(job)}</span>
+                    </div>
                   </div>
                 )}
 

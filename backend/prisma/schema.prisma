@@ -106,14 +106,16 @@ model AiUsageLog {
 }
 
 model SubtitleJob {
-  id         String   @id @default(cuid())
-  status     String   @default("processing") // "processing" | "done" | "failed"
-  filename   String   // original uploaded filename
-  language   String
-  srtContent String?  // populated when done
-  error      String?  // populated when failed
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  id          String   @id @default(cuid())
+  status      String   @default("processing") // "processing" | "done" | "failed"
+  filename    String   // original uploaded filename
+  language    String
+  srtContent  String?  // populated when done
+  error       String?  // populated when failed
+  durationMs  Int?     // total audio duration in ms (from ffprobe)
+  progressPct Int      @default(0) // 0–100, updated during transcription
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   @@index([createdAt])
 }
