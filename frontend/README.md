@@ -1,134 +1,90 @@
-# Frontend - Chinese Flashcards
+# Frontend — Chinese Flashcards
 
-React-based web interface for browsing HSK-graded Chinese articles and managing flashcard collections.
+React 19 web interface for the Chinese Flashcards learning platform, deployed to GitHub Pages.
 
 ## Tech Stack
 
-- **Framework**: React 19.2
-- **Language**: TypeScript 5.9
-- **Build Tool**: Vite 7.2
-- **Compiler**: SWC for fast refresh
-- **Linting**: ESLint with TypeScript support
-- **Styling**: CSS with theme support (light/dark/system)
+- **Framework**: React 19
+- **Language**: TypeScript 5
+- **Build Tool**: Vite + SWC (fast refresh)
+- **Routing**: React Router v7
+- **Styling**: CSS variables with light/dark/system theme support
+- **Linting**: ESLint with TypeScript + React Hooks rules
 
-## Features
+## Pages
 
-- Browse HSK-graded Chinese reading articles
-- View individual words with hover definitions
-- Add/remove words to personal flashcard collection
-- Theme switcher (light/dark/system)
-- Health monitoring page for backend API status
-- Responsive navigation interface
+| Route | Component | Description |
+|---|---|---|
+| `/articles` | `Articles.tsx` | Browse and read Chinese articles with clickable word definitions and TTS narration |
+| `/articles/new` | `SegmentArticle.tsx` | Paste Chinese text to create a new article with AI word enrichment |
+| `/flashcards` | `Flashcards.tsx` | SM-2 spaced repetition study sessions (HSK 1–6 + Saved deck) |
+| `/words/:word` | `WordDetail.tsx` | Stroke order, pinyin, definition, related words, example sentences |
+| `/speech` | `SpeechPractice.tsx` | Record pronunciation and get character-level diff feedback |
+| `/subtitles` | `Subtitles.tsx` | Upload audio/video to generate an `.srt` subtitle file via OpenAI Whisper |
+| `/settings` | `Settings.tsx` | User preferences: pinyin style, font size, speech rate, TTS voice, script variant |
+| `/health` | `Health.tsx` | Backend API connectivity status |
 
-## Prerequisites
+## Key Components
 
-- Node.js 18+ and npm
-- Backend API server running (default: `http://localhost:3000`)
+- **`NavBar.tsx`** — responsive navigation with links to all sections
+- **`ProtectedRoute.tsx`** — redirects unauthenticated users to login
+- **`AudioUpload.tsx`** — drag-and-drop audio file picker with MIME validation
+- **`SpeechToText.tsx`** — server-side STT client (Azure Speech)
+- **`BrowserSTT.tsx`** — Web Speech API wrapper for in-browser STT
 
-## Installation
+## Environment Variables
+
+Create `frontend/.env`:
 
 ```bash
-cd frontend
-npm install
+VITE_API_URL=http://localhost:3001   # backend base URL
 ```
 
 ## Development
 
-Start the development server with hot module replacement:
-
 ```bash
-npm run dev
+npm install
+npm run dev        # http://localhost:5173
 ```
 
-The application will be available at `http://localhost:5173`
-
-## Building for Production
+## Production Build
 
 ```bash
-npm run build
+npm run build      # outputs to dist/
+npm run preview    # preview the production build locally
 ```
 
-Compiles TypeScript and builds optimized production assets to `dist/`.
-
-### Preview Production Build
-
-```bash
-npm run preview
-```
+The app is deployed to GitHub Pages via GitHub Actions on every push to `main`.
 
 ## Project Structure
 
 ```
 frontend/
 ├── src/
-│   ├── App.tsx             # Main application component
-│   ├── App.css             # Application styles
-│   ├── main.tsx            # Entry point
-│   ├── theme.ts            # Theme management hook
-│   ├── pages/              # Page components
-│   │   ├── Articles.tsx    # HSK articles browser
-│   │   └── Health.tsx      # API health monitoring
-│   └── assets/             # Static assets (logos, images)
-├── public/                 # Public static files
-├── index.html              # HTML template
-├── vite.config.ts          # Vite configuration
-├── tsconfig.json           # TypeScript configuration
-└── eslint.config.js        # ESLint configuration
+│   ├── App.tsx               # Router and top-level layout
+│   ├── main.tsx              # Entry point
+│   ├── theme.ts              # Theme (light/dark/system) hook
+│   ├── pages/
+│   │   ├── Articles.tsx      # Article reader with TTS + word lookup
+│   │   ├── Flashcards.tsx    # SM-2 study sessions
+│   │   ├── SegmentArticle.tsx# Article creation + AI enrichment polling
+│   │   ├── WordDetail.tsx    # HanziWriter stroke order + examples
+│   │   ├── SpeechPractice.tsx# Pronunciation practice with LCS diff
+│   │   ├── Subtitles.tsx     # Whisper subtitle generation + job polling
+│   │   ├── Settings.tsx      # User preferences
+│   │   └── Health.tsx        # Backend health monitor
+│   └── components/
+│       ├── NavBar.tsx
+│       ├── ProtectedRoute.tsx
+│       ├── AudioUpload.tsx
+│       ├── SpeechToText.tsx
+│       └── BrowserSTT.tsx
+├── public/
+├── index.html
+├── vite.config.ts
+└── tsconfig.json
 ```
-
-## Pages
-
-### Home
-- Demo counter and navigation
-- Theme switcher
-- Links to other pages
-
-### Articles
-- Displays all HSK articles from the backend API
-- Shows article title, HSK level, and content
-- Lists associated vocabulary words with translations
-- Flashcard add/remove functionality (mock implementation)
-
-### Health
-- Backend API connectivity check
-- Displays server status, uptime, and environment
 
 ## Theme Support
 
-The application includes a theme system supporting:
-- Light mode
-- Dark mode
-- System preference (follows OS settings)
-
-Theme preference is persisted to localStorage and automatically applied on page load.
-
-## API Integration
-
-The frontend expects the backend API at `http://localhost:3000` by default. Update API calls in the components to point to your production backend URL.
-
-### API Endpoints Used
-- `GET /health` - Health check
-- `GET /api/articles` - Fetch articles with words
-- `POST /api/users/mock/flashcards` - Add word to flashcards
-- `DELETE /api/users/mock/flashcards` - Remove word from flashcards
-
-## Code Quality
-
-### Linting
-
-```bash
-npm run lint
-```
-
-Runs ESLint with TypeScript support, React Hooks rules, and React Refresh plugin.
-
-### Type Checking
-
-TypeScript is configured with strict mode enabled for better type safety.
-
-## Notes
-
-- Uses SWC for fast refresh (not Babel)
-- React Compiler is not compatible with SWC (as of Jan 2026)
-- Flashcard functionality uses mock API endpoints (no persistence yet)
-- CORS must be enabled on the backend for local development
+Three modes — Light, Dark, System — toggled from the nav bar. Preference is stored in `localStorage` and applied on load via a CSS variable swap.
