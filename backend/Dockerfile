@@ -25,7 +25,7 @@ FROM node:20-alpine AS runner
 WORKDIR /app
 
 # Install ffmpeg (for audio conversion) and yt-dlp (standalone binary, no Python needed)
-RUN apk add --no-cache ffmpeg curl && \
+RUN apk add --no-cache ffmpeg curl python3 && \
     curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp \
          -o /usr/local/bin/yt-dlp && \
     chmod +x /usr/local/bin/yt-dlp
