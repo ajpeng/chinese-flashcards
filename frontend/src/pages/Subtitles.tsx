@@ -131,7 +131,9 @@ export default function Subtitles(): React.ReactElement {
       let changed = false;
       const next = prev.map(j => {
         const update = updates.find((u) => u && u.id === j.jobId);
-        if (!update || update.status === j.status) return j;
+        if (!update) return j;
+        // Update whenever status OR progressPct changes
+        if (update.status === j.status && (update.progressPct ?? 0) === (j.progressPct ?? 0)) return j;
         changed = true;
         return {
           ...j,
