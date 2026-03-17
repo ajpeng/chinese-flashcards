@@ -74,8 +74,8 @@ const exampleTexts = [
 
 export default function SpeechPractice(): React.ReactElement {
   useEffect(() => {
-    document.title = 'Speech Practice · Chinese Flashcards';
-    return () => { document.title = 'Chinese Flashcards'; };
+    document.title = 'Speech Practice · MandarinKit';
+    return () => { document.title = 'MandarinKit'; };
   }, []);
 
   const [transcriptionResult, setTranscriptionResult] = useState<string>('');

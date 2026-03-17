@@ -636,8 +636,8 @@ export default function Articles(): React.ReactElement {
   const [openArticleId, setOpenArticleId] = useState<number | null>(null);
 
   useEffect(() => {
-    document.title = 'Articles · Chinese Flashcards';
-    return () => { document.title = 'Chinese Flashcards'; };
+    document.title = 'Articles · MandarinKit';
+    return () => { document.title = 'MandarinKit'; };
   }, []);
 
   // Drawer state

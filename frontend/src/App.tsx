@@ -40,6 +40,15 @@ const FEATURES = [
     color: 'rgba(16, 185, 129, 0.85)',
     accent: 'rgba(16, 185, 129, 0.12)',
   },
+  {
+    icon: '💬',
+    title: 'Subtitle Generator',
+    description: 'Upload any audio or video file and get a ready-to-use .srt subtitle file powered by OpenAI Whisper.',
+    href: '/subtitles',
+    label: 'Generate Subtitles',
+    color: 'rgba(245, 158, 11, 0.85)',
+    accent: 'rgba(245, 158, 11, 0.12)',
+  },
 ]
 
 function Home() {
@@ -48,10 +57,10 @@ function Home() {
       {/* Hero */}
       <div className="home-hero">
         <div className="home-hero-char" aria-hidden="true">中</div>
-        <h1 className="home-hero-title">Chinese Flashcards</h1>
+        <h1 className="home-hero-title">MandarinKit</h1>
         <p className="home-hero-sub">
           Master Mandarin with interactive articles, spaced-repetition flashcards,
-          and AI-powered speech practice — all in one place.
+          AI-powered speech practice, and subtitle generation — all in one place.
         </p>
         <div className="home-hero-actions">
           <Link to="/articles" className="home-btn home-btn-primary">Get Started →</Link>

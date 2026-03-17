@@ -6,8 +6,8 @@ import { convertPinyinStyle } from '../utils/pinyin';
 // Set document title helper
 function usePageTitle(title: string) {
   useEffect(() => {
-    document.title = `${title} · Chinese Flashcards`;
-    return () => { document.title = 'Chinese Flashcards'; };
+    document.title = `${title} · MandarinKit`;
+    return () => { document.title = 'MandarinKit'; };
   }, [title]);
 }
 

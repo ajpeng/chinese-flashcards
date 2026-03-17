@@ -125,7 +125,7 @@ function NavBar() {
             backgroundClip: 'text',
             fontWeight: 700,
           }}>中</span>
-          <h1 className="navbar-title" style={{ margin: 0, fontSize: 18, fontWeight: 700, letterSpacing: '-0.01em' }}>Chinese Flashcards</h1>
+          <h1 className="navbar-title" style={{ margin: 0, fontSize: 18, fontWeight: 700, letterSpacing: '-0.01em' }}>MandarinKit</h1>
         </Link>
 
         {/* Desktop nav links */}

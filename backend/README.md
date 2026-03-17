@@ -1,4 +1,4 @@
-# Backend — Chinese Flashcards API
+# Backend — MandarinKit API
 
 Express + TypeScript REST API deployed to Fly.io, backed by PostgreSQL on Neon via Prisma ORM.
 
@@ -138,8 +138,8 @@ The multi-stage Dockerfile:
 2. **runner** (`node:20-alpine`) — installs `ffmpeg` + `python3`, copies compiled output
 
 ```bash
-docker build -t chinese-flashcards-backend .
-docker run -p 3001:3001 --env-file .env chinese-flashcards-backend
+docker build -t mandarin-kit-backend .
+docker run -p 3001:3001 --env-file .env mandarin-kit-backend
 ```
 
 ## Deployment (Fly.io)

@@ -1,6 +1,6 @@
-# Frontend — Chinese Flashcards
+# Frontend — MandarinKit
 
-React 19 web interface for the Chinese Flashcards learning platform, deployed to GitHub Pages.
+React 19 web interface for MandarinKit, deployed to GitHub Pages.
 
 ## Tech Stack
 

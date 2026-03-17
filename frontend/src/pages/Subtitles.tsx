@@ -95,8 +95,8 @@ const statusLabel: Record<JobStatus, string> = {
 
 export default function Subtitles(): React.ReactElement {
   useEffect(() => {
-    document.title = 'Subtitle Generator · Chinese Flashcards';
-    return () => { document.title = 'Chinese Flashcards'; };
+    document.title = 'Subtitle Generator · MandarinKit';
+    return () => { document.title = 'MandarinKit'; };
   }, []);
 
   const [jobs, setJobs] = useState<Job[]>(loadJobs);
