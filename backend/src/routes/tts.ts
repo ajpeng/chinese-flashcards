@@ -6,6 +6,8 @@ import { TokenizationService } from '../services/tokenization.service';
 import { createHash } from 'crypto';
 import prisma from '../prisma/client';
 import logger from '../utils/logger';
+import { S3Client, PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 
 const router = Router();
 
@@ -17,6 +19,31 @@ if (!AZURE_SPEECH_KEY) {
   logger.error('AZURE_SPEECH_KEY environment variable is required');
 }
 
+// Tigris (S3-compatible) configuration
+// Fly.io sets BUCKET_NAME, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, and AWS_ENDPOINT_URL_S3 automatically
+const S3_BUCKET = process.env.BUCKET_NAME;
+const s3 = new S3Client({
+  region: 'auto',
+  endpoint: process.env.AWS_ENDPOINT_URL_S3 || 'https://fly.storage.tigris.dev',
+});
+
+if (!S3_BUCKET) {
+  logger.error('BUCKET_NAME environment variable is required');
+}
+
+async function uploadAudioToS3(key: string, audioBuffer: Buffer): Promise<void> {
+  await s3.send(new PutObjectCommand({
+    Bucket: S3_BUCKET,
+    Key: key,
+    Body: audioBuffer,
+    ContentType: 'audio/wav',
+  }));
+}
+
+async function getPresignedUrl(key: string): Promise<string> {
+  return getSignedUrl(s3, new GetObjectCommand({ Bucket: S3_BUCKET, Key: key }), { expiresIn: 3600 });
+}
+
 interface WordTiming {
   word: string;
   start: number;
@@ -25,7 +52,7 @@ interface WordTiming {
 }
 
 interface TTSResponse {
-  audioData: string;
+  audioUrl: string;
   timings: WordTiming[];
   totalDuration: number;
   segments: Array<{ text: string; start: number; end: number; index: number }>;
@@ -61,6 +88,11 @@ router.post(
       return;
     }
 
+    if (!S3_BUCKET) {
+      res.status(500).json({ error: 'S3 bucket not configured' });
+      return;
+    }
+
     const { text, voice = 'zh-CN-XiaoxiaoNeural', rate = '1.0', words = [] } = req.body;
 
     logger.info({ textPreview: text.substring(0, 50) }, 'TTS request received');
@@ -70,7 +102,7 @@ router.post(
     const cacheHash = createCacheHash(text + wordsString, voice, rate);
 
     // Check if cached version exists
-    let cachedTTS = await prisma.tTSCache.findUnique({
+    const cachedTTS = await prisma.tTSCache.findUnique({
       where: { textHash: cacheHash }
     });
 
@@ -89,9 +121,10 @@ router.post(
       const mappings = JSON.parse(JSON.stringify(cachedTTS.mappings)) as Array<{ segmentIndex: number; start: number; duration: number; word: string }>;
       const tokenMappings = TokenizationService.createTokenToSegmentMapping(tokens, segments, mappings);
 
-      // Return cached response
+      const audioUrl = await getPresignedUrl(cachedTTS.s3Key);
+
       const response: TTSResponse = {
-        audioData: cachedTTS.audioData,
+        audioUrl,
         timings: JSON.parse(JSON.stringify(cachedTTS.timings)) as WordTiming[],
         totalDuration: cachedTTS.totalDuration,
         segments,
@@ -134,9 +167,9 @@ router.post(
     synthesizer.wordBoundary = (sender, event) => {
       const audioOffsetMs = event.audioOffset / 10000; // Convert from ticks to milliseconds
       const durationMs = event.duration / 10000; // Convert from ticks to milliseconds
-      
+
       logger.debug({ text: event.text, audioOffsetMs, durationMs }, 'Word boundary');
-      
+
       wordTimings.push({
         word: event.text,
         start: audioOffsetMs,
@@ -162,11 +195,10 @@ router.post(
     synthesizer.close();
 
     if (result.reason === sdk.ResultReason.SynthesizingAudioCompleted) {
-      // Convert audio buffer to base64
-      const audioData = Buffer.from(result.audioData).toString('base64');
-      
+      const audioBuffer = Buffer.from(result.audioData);
+
       // Calculate total duration
-      const totalDuration = wordTimings.length > 0 
+      const totalDuration = wordTimings.length > 0
         ? Math.max(...wordTimings.map(w => w.start + w.duration))
         : 0;
 
@@ -178,21 +210,23 @@ router.post(
       const tokenMappings = TokenizationService.createTokenToSegmentMapping(tokens, segments, mappings);
 
       logger.info({ wordTimings: wordTimings.length, segments: segments.length, mappings: mappings.length, tokens: tokens.length }, 'TTS synthesis completed');
-      
+
       // Debug specific problematic text
       if (text.includes('北卡罗莱纳州')) {
         logger.debug({ tokens: tokens.slice(0, 20), segments: segments.slice(0, 10), tokenMappings: tokenMappings.slice(0, 10) }, 'DEBUG: Text contains 北卡罗莱纳州');
       }
 
-      // Cache the generated TTS
+      // Upload audio to S3 and cache metadata in DB
+      const s3Key = `tts/${cacheHash}.wav`;
       try {
+        await uploadAudioToS3(s3Key, audioBuffer);
         await prisma.tTSCache.create({
           data: {
             textHash: cacheHash,
             text,
             voice,
             rate,
-            audioData,
+            s3Key,
             timings: JSON.parse(JSON.stringify(wordTimings)),
             totalDuration,
             segments: JSON.parse(JSON.stringify(segments)),
@@ -200,14 +234,16 @@ router.post(
             lastUsedAt: new Date()
           }
         });
-        logger.info({ event: 'tts_cached' }, 'TTS audio cached');
+        logger.info({ event: 'tts_cached', s3Key }, 'TTS audio cached to S3');
       } catch (cacheError) {
         logger.error({ err: cacheError }, 'Failed to cache TTS audio');
         // Don't fail the request if caching fails
       }
 
+      const audioUrl = await getPresignedUrl(s3Key);
+
       const response: TTSResponse = {
-        audioData,
+        audioUrl,
         timings: wordTimings,
         totalDuration,
         segments,
@@ -236,7 +272,7 @@ router.get('/cache/stats', async (req: Request, res: Response) => {
       orderBy: { createdAt: 'desc' },
       select: { createdAt: true }
     });
-    
+
     res.json({
       totalEntries,
       oldestEntry: oldestEntry?.createdAt,
@@ -253,7 +289,7 @@ router.delete('/cache/cleanup', async (req: Request, res: Response) => {
   try {
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-    
+
     const deletedEntries = await prisma.tTSCache.deleteMany({
       where: {
         lastUsedAt: {
@@ -261,9 +297,9 @@ router.delete('/cache/cleanup', async (req: Request, res: Response) => {
         }
       }
     });
-    
-    res.json({ 
-      message: `Cleaned up ${deletedEntries.count} cache entries older than 30 days` 
+
+    res.json({
+      message: `Cleaned up ${deletedEntries.count} cache entries older than 30 days`
     });
   } catch (error) {
     logger.error({ err: error }, 'TTS cache cleanup error');
@@ -278,14 +314,15 @@ router.get('/health', async (req: Request, res: Response) => {
       ttsService: 'Azure Speech SDK',
       azureKeyConfigured: !!AZURE_SPEECH_KEY,
       azureRegion: AZURE_SPEECH_REGION,
+      tigrisBucketConfigured: !!S3_BUCKET,
       sdkVersion: (sdk.SpeechConfig as any).getVersion ? (sdk.SpeechConfig as any).getVersion() : 'Unknown',
       timestamp: new Date().toISOString()
     };
-    
+
     res.json(healthCheck);
   } catch (error) {
     logger.error({ err: error }, 'TTS health check error');
-    res.status(500).json({ 
+    res.status(500).json({
       error: 'TTS health check failed',
       details: error instanceof Error ? error.message : 'Unknown error'
     });

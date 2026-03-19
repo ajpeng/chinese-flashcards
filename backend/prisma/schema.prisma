@@ -126,7 +126,7 @@ model TTSCache {
   text          String   // Original text
   voice         String   // Voice name (e.g., "zh-CN-XiaoxiaoNeural")
   rate          String   // Speech rate (e.g., "1.0")
-  audioData     String   // Base64 encoded audio
+  s3Key         String   // S3 object key for audio file
   timings       Json     // Word timings array
   totalDuration Float    // Total audio duration
   segments      Json     // Text segments

@@ -161,7 +161,7 @@ function ArticleContent({
       });
       if (!response.ok) throw new Error(`TTS request failed: ${response.statusText}`);
       const data = await response.json();
-      new Audio(`data:audio/wav;base64,${data.audioData}`).play();
+      new Audio(data.audioUrl).play();
     } catch (error) {
       console.error('TTS Error:', error);
       alert('Failed to generate speech');
@@ -770,7 +770,7 @@ export default function Articles(): React.ReactElement {
       });
       if (!res.ok) throw new Error('TTS failed');
       const data = await res.json();
-      new Audio(`data:audio/wav;base64,${data.audioData}`).play();
+      new Audio(data.audioUrl).play();
     } catch (err) { console.error('TTS Error:', err); alert('Failed to generate speech'); }
   };
 
@@ -791,7 +791,7 @@ export default function Articles(): React.ReactElement {
       const data = await res.json();
       setTokens(data.tokens || []);
       setWordTimings(data.timings || []);
-      setCurrentAudioSrc(`data:audio/wav;base64,${data.audioData}`);
+      setCurrentAudioSrc(data.audioUrl);
     } catch (err) {
       console.error('Azure TTS Error:', err);
       setReadingArticleId(null);

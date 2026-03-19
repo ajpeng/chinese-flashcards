@@ -53,22 +53,35 @@ export function pinyinMarksToNumbers(pinyin: string): string {
 
 /**
  * Convert pinyin with tone numbers to tone marks
- * Example: "ni3 hao3" → "nǐ hǎo"
+ * Example: "ni3 hao3" → "nǐ hǎo", "ruan4 jian4" → "ruàn jiàn"
+ *
+ * In CEDICT format the tone number comes at the END of the syllable after any
+ * trailing consonants (e.g. "ruan4", "zhong1"), so we must apply tone
+ * placement rules rather than simply replacing vowel+number directly.
  */
 export function pinyinNumbersToMarks(pinyin: string): string {
   if (!pinyin) return pinyin;
 
-  let result = pinyin;
+  // Match a syllable body (letters + v for ü) followed by a tone number 1–4
+  return pinyin.replace(/([a-zuüv]+)([1-4])/gi, (_, syllable: string, tone: string) => {
+    const s = syllable.toLowerCase();
 
-  // Replace base vowel + number with tone mark
-  // Process in reverse order (v4, v3, v2, v1, etc.) to avoid partial replacements
-  const entries = Object.entries(NUMBERS_TO_TONE_MARKS).sort((a, b) => b[0].localeCompare(a[0]));
-
-  for (const [numForm, mark] of entries) {
-    result = result.replace(new RegExp(numForm, 'g'), mark);
-  }
-
-  return result;
+    // Standard pinyin tone placement rules:
+    // 1. 'a' or 'e' always takes the mark
+    if (s.includes('a')) return syllable.replace('a', NUMBERS_TO_TONE_MARKS[`a${tone}`] ?? 'a');
+    if (s.includes('e')) return syllable.replace('e', NUMBERS_TO_TONE_MARKS[`e${tone}`] ?? 'e');
+    // 2. In 'ou', 'o' takes the mark
+    if (s.includes('ou')) return syllable.replace('o', NUMBERS_TO_TONE_MARKS[`o${tone}`] ?? 'o');
+    // 3. Otherwise the last vowel takes the mark
+    const vowels = 'aeiouüv';
+    for (let i = s.length - 1; i >= 0; i--) {
+      if (vowels.includes(s[i])) {
+        const mark = NUMBERS_TO_TONE_MARKS[`${s[i]}${tone}`];
+        if (mark) return syllable.slice(0, i) + mark + syllable.slice(i + 1);
+      }
+    }
+    return syllable;
+  });
 }
 
 /**

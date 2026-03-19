@@ -411,7 +411,7 @@ export default function WordDetail() {
       });
       if (!res.ok) throw new Error('TTS failed');
       const d = await res.json();
-      const audio = new Audio(`data:audio/wav;base64,${d.audioData}`);
+      const audio = new Audio(d.audioUrl);
       audio.onended = () => { if (idx !== undefined) setSpeakingIdx(null); };
       audio.onerror = () => { if (idx !== undefined) setSpeakingIdx(null); };
       audio.play();

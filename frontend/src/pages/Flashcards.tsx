@@ -325,7 +325,7 @@ export default function Flashcards() {
       });
       if (!res.ok) return;
       const data = await res.json();
-      new Audio(`data:audio/wav;base64,${data.audioData}`).play();
+      new Audio(data.audioUrl).play();
     } catch { /* ignore TTS errors silently */ }
   };
 

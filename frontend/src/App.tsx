@@ -60,7 +60,7 @@ function Home() {
         <h1 className="home-hero-title">MandarinKit</h1>
         <p className="home-hero-sub">
           Master Mandarin with interactive articles, spaced-repetition flashcards,
-          AI-powered speech practice, and subtitle generation — all in one place.
+          AI-powered speech practice, and subtitle generation all in one place.
         </p>
         <div className="home-hero-actions">
           <Link to="/articles" className="home-btn home-btn-primary">Get Started →</Link>
