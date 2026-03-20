@@ -426,6 +426,7 @@ export default function Flashcards() {
     try {
       const res = await fetch(`${API_URL}/api/words/lookup?q=${encodeURIComponent(word)}`);
       if (res.status === 404) { setAddLookupError('Word not found in the dictionary.'); return; }
+      if (res.status === 503) { setAddLookupError('AI lookup is temporarily unavailable. Please try again in a moment.'); return; }
       if (!res.ok) { setAddLookupError('Lookup failed. Please try again.'); return; }
       const data = await res.json();
       if (!data.pinyin || !data.english) { setAddLookupError('No definition found for this word.'); return; }

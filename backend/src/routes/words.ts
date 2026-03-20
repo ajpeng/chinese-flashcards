@@ -67,7 +67,13 @@ router.get('/lookup', async (req: Request, res: Response) => {
   // 3. AI lookup — call OpenRouter and persist result to all matching Word rows
   const aiResult = await lookupService.lookupWord(word);
   if (!aiResult || (!aiResult.pinyin && !aiResult.english)) {
-    res.status(404).json({ error: 'Not found' });
+    if (lookupService.isCircuitBreakerOpen()) {
+      // AI was blocked by the circuit breaker (too many recent failures).
+      // Return 503 so the client knows to retry rather than treating this as "not found".
+      res.status(503).json({ error: 'AI lookup temporarily unavailable' });
+    } else {
+      res.status(404).json({ error: 'Not found' });
+    }
     return;
   }
 

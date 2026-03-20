@@ -82,7 +82,9 @@ class LookupService {
         return null;
       }
 
-      const isChinese = /[\u4E00-\u9FFF]/.test(simplified);
+      // Include CJK Extension A (3400–4DBF) and Compatibility Ideographs (F900–FAFF)
+      // in addition to the main CJK Unified Ideographs block (4E00–9FFF).
+      const isChinese = /[\u3400-\u9FFF\uF900-\uFAFF]/.test(simplified);
       if (!isChinese) {
         return null;
       }
@@ -187,6 +189,11 @@ If it's a proper name, include that in the definition.`
       }, 'AI word lookup failed');
       return null;
     }
+  }
+
+  /** True when the circuit breaker is OPEN and AI calls will be fast-failed. */
+  isCircuitBreakerOpen(): boolean {
+    return this.breaker.getState() === 'OPEN';
   }
 
   async lookupBatch(words: string[], context: LookupContext = {}): Promise<Map<string, LookupResult>> {
