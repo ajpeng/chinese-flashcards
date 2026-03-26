@@ -116,6 +116,7 @@ export default function PodcastEpisode() {
   const [lookingUp, setLookingUp] = useState('');
 
   const [pollingStatus, setPollingStatus] = useState(false);
+  const [showEnglish, setShowEnglish] = useState(true);
 
   const audioRef = useRef<HTMLAudioElement>(null);
 
@@ -441,10 +442,25 @@ export default function PodcastEpisode() {
       {hasCues && (
         <div style={{
           background: 'var(--card-bg)', border: '1px solid var(--border-color)',
-          borderRadius: 12, padding: '28px 24px',
+          borderRadius: 12, padding: '20px 24px 24px',
           minHeight: 140,
           display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 16,
         }}>
+          {/* Toggle English */}
+          <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+            <button
+              onClick={() => setShowEnglish(v => !v)}
+              style={{
+                fontSize: 11, fontWeight: 600, padding: '3px 10px', borderRadius: 99,
+                border: '1px solid var(--border-color)',
+                background: showEnglish ? 'rgba(59,130,246,0.1)' : 'transparent',
+                color: showEnglish ? 'rgba(59,130,246,0.9)' : 'var(--muted-color)',
+                cursor: 'pointer', userSelect: 'none',
+              }}
+            >
+              EN {showEnglish ? 'on' : 'off'}
+            </button>
+          </div>
           {/* Chinese subtitle — clickable characters */}
           <div style={{ textAlign: 'center', minHeight: 48 }}>
             {activeZh ? (
@@ -477,19 +493,21 @@ export default function PodcastEpisode() {
             )}
           </div>
 
-          {/* Divider */}
-          <div style={{ height: 1, background: 'var(--border-light, var(--border-color))', margin: '0 -4px' }} />
-
-          {/* English subtitle */}
-          <div style={{ textAlign: 'center', minHeight: 32 }}>
-            {activeEn ? (
-              <div style={{ fontSize: 'clamp(14px, 3vw, 18px)', color: 'var(--muted-color)', lineHeight: 1.5 }}>
-                {activeEn.text}
+          {/* Divider + English subtitle (collapsible) */}
+          {showEnglish && (
+            <>
+              <div style={{ height: 1, background: 'var(--border-light, var(--border-color))', margin: '0 -4px' }} />
+              <div style={{ textAlign: 'center', minHeight: 32 }}>
+                {activeEn ? (
+                  <div style={{ fontSize: 'clamp(14px, 3vw, 18px)', color: 'var(--muted-color)', lineHeight: 1.5 }}>
+                    {activeEn.text}
+                  </div>
+                ) : activeZh ? (
+                  <div style={{ color: 'rgba(128,128,128,0.4)', fontSize: 13, fontStyle: 'italic' }}>—</div>
+                ) : null}
               </div>
-            ) : activeZh ? (
-              <div style={{ color: 'rgba(128,128,128,0.4)', fontSize: 13, fontStyle: 'italic' }}>—</div>
-            ) : null}
-          </div>
+            </>
+          )}
 
           {/* Keyboard hint */}
           <div style={{ textAlign: 'center', fontSize: 11, color: 'rgba(128,128,128,0.4)' }}>
