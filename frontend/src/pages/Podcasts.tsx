@@ -337,8 +337,8 @@ export default function Podcasts() {
                       )}
                     </div>
 
-                    <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
-                      {ep.subtitleStatus === 'none' || ep.subtitleStatus === 'failed' ? (
+                    <div style={{ display: 'flex', gap: 8, flexShrink: 0, alignItems: 'center' }}>
+                      {(ep.subtitleStatus === 'none' || ep.subtitleStatus === 'failed') && (
                         <button
                           onClick={() => handleGenerate(podcast.id, ep.id)}
                           disabled={generatingEps.has(ep.id)}
@@ -351,24 +351,22 @@ export default function Podcasts() {
                         >
                           Generate Subtitles
                         </button>
-                      ) : ep.subtitleStatus === 'processing_zh' || ep.subtitleStatus === 'processing_en' ? (
+                      )}
+                      {(ep.subtitleStatus === 'processing_zh' || ep.subtitleStatus === 'processing_en') && (
                         <span style={{ fontSize: 13, color: 'var(--muted-color)', fontStyle: 'italic' }}>
                           {ep.subtitleStatus === 'processing_zh' ? 'Transcribing…' : 'Translating…'}
                         </span>
-                      ) : null}
-
-                      {ep.subtitleStatus === 'done' && (
-                        <button
-                          onClick={() => navigate(`/podcasts/${podcast.id}/episodes/${ep.id}`)}
-                          style={{
-                            padding: '6px 14px', borderRadius: 6, border: 'none',
-                            background: 'rgba(16,185,129,0.85)', color: '#fff',
-                            fontSize: 12, fontWeight: 600, cursor: 'pointer',
-                          }}
-                        >
-                          Play ▶
-                        </button>
                       )}
+                      <button
+                        onClick={() => navigate(`/podcasts/${podcast.id}/episodes/${ep.id}`)}
+                        style={{
+                          padding: '6px 14px', borderRadius: 6, border: 'none',
+                          background: 'rgba(16,185,129,0.85)', color: '#fff',
+                          fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                        }}
+                      >
+                        Play ▶
+                      </button>
                     </div>
                   </div>
                 ))}

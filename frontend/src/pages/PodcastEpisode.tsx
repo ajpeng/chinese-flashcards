@@ -92,7 +92,7 @@ function formatTime(secs: number): string {
 
 export default function PodcastEpisode() {
   const { podcastId, episodeId } = useParams<{ podcastId: string; episodeId: string }>();
-  const { token } = useAuth() as any;
+  const { accessToken: token } = useAuth() as any;
 
   const [episode, setEpisode] = useState<Episode | null>(null);
   const [loading, setLoading] = useState(true);
@@ -314,7 +314,7 @@ export default function PodcastEpisode() {
           borderRadius: 10, padding: '12px 16px', marginBottom: 20,
           fontSize: 13, color: 'var(--muted-color)',
         }}>
-          No subtitles yet. Go back to the podcast library and click "Generate Subtitles" for this episode.
+          No subtitles yet. Click "Generate Subtitles" in the podcast library to get clickable Chinese subtitles.
         </div>
       )}
 
