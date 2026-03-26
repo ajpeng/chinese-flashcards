@@ -67,25 +67,25 @@ function NavBar() {
   const navLinks = (
     <>
       <Link to="/articles" style={navLinkStyle('/articles')}>
-        <span style={{ fontSize: 17 }}>📚</span> Articles
-      </Link>
-      <Link to="/flashcards" style={navLinkStyle('/flashcards')}>
-        <span style={{ fontSize: 17 }}>🃏</span> Flashcards
-      </Link>
-      <Link to="/speech-practice" style={navLinkStyle('/speech-practice')}>
-        <span style={{ fontSize: 17 }}>🎤</span> Speech Practice
-      </Link>
-      <Link to="/subtitles" style={navLinkStyle('/subtitles')}>
-        <span style={{ fontSize: 17 }}>💬</span> Subtitles
-      </Link>
-      <Link to="/podcasts" style={navLinkStyle('/podcasts')}>
-        <span style={{ fontSize: 17 }}>🎙</span> Podcasts
+        <span style={{ fontSize: 17 }}></span> Articles
       </Link>
       {user && (
         <Link to="/new" style={navLinkStyle('/new')}>
-          <span style={{ fontSize: 17 }}>✏️</span> New Article
+          <span style={{ fontSize: 17 }}></span> New Article
         </Link>
       )}
+      <Link to="/flashcards" style={navLinkStyle('/flashcards')}>
+        <span style={{ fontSize: 17 }}></span> Flashcards
+      </Link>
+      <Link to="/speech-practice" style={navLinkStyle('/speech-practice')}>
+        <span style={{ fontSize: 17 }}></span> Speech Practice
+      </Link>
+      <Link to="/subtitles" style={navLinkStyle('/subtitles')}>
+        <span style={{ fontSize: 17 }}></span> Subtitles
+      </Link>
+      <Link to="/podcasts" style={navLinkStyle('/podcasts')}>
+        <span style={{ fontSize: 17 }}></span> Podcasts
+      </Link>
     </>
   )
 

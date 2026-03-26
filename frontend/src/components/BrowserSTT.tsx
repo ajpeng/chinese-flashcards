@@ -215,7 +215,7 @@ export const BrowserSTT: React.FC<BrowserSTTProps> = ({
             gap: 8
           }}
         >
-          {isListening ? '⏹️ Stop' : '🎤 Listen'}
+          {isListening ? 'Stop' : 'Listen'}
           {isListening && (
             <span style={{ 
               width: 8, 
