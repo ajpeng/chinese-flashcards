@@ -324,7 +324,6 @@ function NavBar() {
               padding: '8px 12px 12px',
               gap: 4,
               zIndex: 999,
-              boxShadow: '0 4px 12px rgba(0,0,0,0.2)',
             }}
           >
             {navLinks}

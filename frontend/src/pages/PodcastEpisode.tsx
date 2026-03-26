@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import WordDrawer, { LookedUpWord } from '../components/WordDrawer';
+import WordDrawer, { type LookedUpWord } from '../components/WordDrawer';
 
 const API_URL = import.meta.env.VITE_API_URL || 'https://api.ajpeng.ca';
 

@@ -81,12 +81,6 @@ const statusBg: Record<JobStatus, string> = {
   failed: 'rgba(97,0,0,0.06)',
 };
 
-const statusBorder: Record<JobStatus, string> = {
-  processing: 'rgba(180,120,0,0.2)',
-  done: 'rgba(16,185,129,0.2)',
-  failed: 'rgba(97,0,0,0.15)',
-};
-
 const statusLabel: Record<JobStatus, string> = {
   processing: 'Processing…',
   done: 'Done',
