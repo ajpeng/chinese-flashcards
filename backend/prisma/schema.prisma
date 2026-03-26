@@ -164,6 +164,21 @@ model PodcastEpisode {
   @@index([podcastId])
 }
 
+// Shared subtitle cache keyed by audioUrl — allows any user's completed subtitle
+// generation to be instantly reused by other users listening to the same episode.
+model SharedEpisodeSubtitle {
+  id            String   @id @default(cuid())
+  audioUrl      String   @unique
+  zhSrtContent  String?
+  enSrtContent  String?
+  status        String   @default("none") // "none" | "processing" | "done" | "failed"
+  error         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([status])
+}
+
 model TTSCache {
   id            String   @id @default(cuid())
   textHash      String   @unique // SHA-256 hash of text+voice+rate combination

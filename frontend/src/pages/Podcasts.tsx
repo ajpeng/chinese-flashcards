@@ -137,9 +137,26 @@ export default function Podcasts() {
   const handleGenerate = async (podcastId: string, episodeId: string) => {
     setGeneratingEps(s => new Set(s).add(episodeId));
     try {
-      await fetch(`${API_URL}/api/podcasts/${podcastId}/episodes/${episodeId}/subtitles`, {
+      const res = await fetch(`${API_URL}/api/podcasts/${podcastId}/episodes/${episodeId}/subtitles`, {
         method: 'POST', headers, credentials: 'include',
       });
+      const data = await res.json();
+
+      // Cache hit: server already had subtitles — update immediately, no polling needed
+      if (data.subtitleStatus === 'done') {
+        setPodcasts(prev => prev.map(p =>
+          p.id !== podcastId ? p : {
+            ...p,
+            episodes: p.episodes.map(e =>
+              e.id !== episodeId ? e : { ...e, subtitleStatus: 'done' }
+            ),
+          }
+        ));
+        setGeneratingEps(s => { const n = new Set(s); n.delete(episodeId); return n; });
+        return;
+      }
+
+      // Normal path: optimistic update to processing, then poll
       setPodcasts(prev => prev.map(p =>
         p.id !== podcastId ? p : {
           ...p,
@@ -148,13 +165,12 @@ export default function Podcasts() {
           ),
         }
       ));
-      // Poll for completion
       const poll = setInterval(async () => {
-        const res = await fetch(
+        const statusRes = await fetch(
           `${API_URL}/api/podcasts/${podcastId}/episodes/${episodeId}/subtitles/status`,
           { headers, credentials: 'include' }
         );
-        const status = await res.json();
+        const status = await statusRes.json();
         setPodcasts(prev => prev.map(p =>
           p.id !== podcastId ? p : {
             ...p,

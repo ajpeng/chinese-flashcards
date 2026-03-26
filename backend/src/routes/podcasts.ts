@@ -195,12 +195,55 @@ router.post('/:podcastId/episodes/:episodeId/subtitles', async (req: Request, re
     return;
   }
 
-  if (episode.subtitleStatus === 'processing_zh' || episode.subtitleStatus === 'processing_en') {
-    res.status(409).json({ error: 'Subtitle generation already in progress' });
+  if (
+    episode.subtitleStatus === 'done' ||
+    episode.subtitleStatus === 'processing_zh' ||
+    episode.subtitleStatus === 'processing_en'
+  ) {
+    res.status(409).json({
+      error: episode.subtitleStatus === 'done'
+        ? 'Subtitles already generated'
+        : 'Subtitle generation already in progress',
+    });
     return;
   }
 
-  // Create a SubtitleJob and start background processing
+  // ── Shared cache check ─────────────────────────────────────────────────────
+  // If another user has already generated subtitles for the same audio URL,
+  // copy them directly — no Whisper call needed.
+  const shared = await prisma.sharedEpisodeSubtitle.findUnique({
+    where: { audioUrl: episode.audioUrl },
+  });
+
+  if (shared?.status === 'done' && shared.zhSrtContent && shared.enSrtContent) {
+    logger.info({ episodeId: episode.id, audioUrl: episode.audioUrl }, 'Subtitle cache hit — copying shared subtitles');
+
+    // Create a SubtitleJob row so the existing GET endpoints can read zhSrtContent via the join
+    const cachedJob = await prisma.subtitleJob.create({
+      data: {
+        status: 'done',
+        filename: episode.title,
+        language: 'zh-CN',
+        srtContent: shared.zhSrtContent,
+        progressPct: 100,
+      },
+    });
+
+    await prisma.podcastEpisode.update({
+      where: { id: episode.id },
+      data: {
+        zhSubtitleJobId: cachedJob.id,
+        enSrtContent: shared.enSrtContent,
+        subtitleStatus: 'done',
+        subtitleError: null,
+      },
+    });
+
+    res.status(200).json({ subtitleStatus: 'done' });
+    return;
+  }
+
+  // ── Normal generation pipeline ─────────────────────────────────────────────
   const job = await prisma.subtitleJob.create({
     data: { status: 'processing', filename: episode.title, language: 'zh-CN' },
   });
@@ -216,6 +259,13 @@ router.post('/:podcastId/episodes/:episodeId/subtitles', async (req: Request, re
   (async () => {
     let tmpPath: string | null = null;
     try {
+      // Mark as in-progress in shared cache to signal other concurrent requests
+      await prisma.sharedEpisodeSubtitle.upsert({
+        where: { audioUrl: episode.audioUrl },
+        create: { audioUrl: episode.audioUrl, status: 'processing' },
+        update: { status: 'processing', error: null },
+      });
+
       logger.info({ episodeId: episode.id, jobId: job.id }, 'Downloading podcast audio');
       tmpPath = await downloadToTempFile(episode.audioUrl);
 
@@ -226,9 +276,15 @@ router.post('/:podcastId/episodes/:episodeId/subtitles', async (req: Request, re
       // Check if transcription succeeded
       const updatedJob = await prisma.subtitleJob.findUnique({ where: { id: job.id } });
       if (!updatedJob || updatedJob.status !== 'done' || !updatedJob.srtContent) {
+        const errMsg = updatedJob?.error ?? 'Transcription failed';
         await prisma.podcastEpisode.update({
           where: { id: episode.id },
-          data: { subtitleStatus: 'failed', subtitleError: updatedJob?.error ?? 'Transcription failed' },
+          data: { subtitleStatus: 'failed', subtitleError: errMsg },
+        });
+        await prisma.sharedEpisodeSubtitle.upsert({
+          where: { audioUrl: episode.audioUrl },
+          create: { audioUrl: episode.audioUrl, status: 'failed', error: errMsg },
+          update: { status: 'failed', error: errMsg },
         });
         return;
       }
@@ -247,13 +303,36 @@ router.post('/:podcastId/episodes/:episodeId/subtitles', async (req: Request, re
         data: { enSrtContent: enSrt, subtitleStatus: 'done' },
       });
 
+      // Persist to shared cache so future users get instant results
+      await prisma.sharedEpisodeSubtitle.upsert({
+        where: { audioUrl: episode.audioUrl },
+        create: {
+          audioUrl: episode.audioUrl,
+          zhSrtContent: updatedJob.srtContent,
+          enSrtContent: enSrt,
+          status: 'done',
+        },
+        update: {
+          zhSrtContent: updatedJob.srtContent,
+          enSrtContent: enSrt,
+          status: 'done',
+          error: null,
+        },
+      });
+
       logger.info({ episodeId: episode.id }, 'Podcast subtitles complete');
     } catch (err: any) {
       logger.error({ episodeId: episode.id, err }, 'Podcast subtitle pipeline failed');
       if (tmpPath) { try { fs.unlinkSync(tmpPath); } catch {} }
+      const errMsg = err.message ?? 'Unknown error';
       await prisma.podcastEpisode.update({
         where: { id: episode.id },
-        data: { subtitleStatus: 'failed', subtitleError: err.message ?? 'Unknown error' },
+        data: { subtitleStatus: 'failed', subtitleError: errMsg },
+      });
+      await prisma.sharedEpisodeSubtitle.upsert({
+        where: { audioUrl: episode.audioUrl },
+        create: { audioUrl: episode.audioUrl, status: 'failed', error: errMsg },
+        update: { status: 'failed', error: errMsg },
       });
     }
   })();
