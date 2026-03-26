@@ -132,8 +132,8 @@ export default function WordDrawer({ word, pinyinStyle = 'marks', onClose }: Wor
               <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--muted-color)', marginBottom: 8 }}>
                 Meaning
               </div>
-              <div style={{ fontSize: 14, lineHeight: 1.6, color: 'var(--text-color)' }}>
-                {word.english}
+              <div style={{ fontSize: 14, lineHeight: 1.6, color: word.english ? 'var(--text-color)' : 'var(--muted-color)', fontStyle: word.english ? 'normal' : 'italic' }}>
+                {word.english || 'Definition not available'}
               </div>
             </div>
 

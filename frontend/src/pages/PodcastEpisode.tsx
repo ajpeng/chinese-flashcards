@@ -56,17 +56,16 @@ function findActiveCue(cues: SrtCue[], timeMs: number): SrtCue | null {
   return null;
 }
 
-// Tokenize a Chinese string into clickable spans
+// Tokenize a Chinese string into clickable spans.
+// Each Han character is its own token so every character has a CC-CEDICT entry.
+// Non-Han runs (punctuation, spaces, Latin) are grouped as single non-clickable tokens.
 function tokenizeZh(text: string): string[] {
   const tokens: string[] = [];
   for (let i = 0; i < text.length; ) {
     const ch = text[i];
     if (/[\u4E00-\u9FFF\u3400-\u4DBF]/.test(ch)) {
-      // Try to grab up to 4 chars as one token (simple greedy)
-      let len = Math.min(4, text.length - i);
-      while (len > 1 && !/[\u4E00-\u9FFF\u3400-\u4DBF]/.test(text[i + len - 1])) len--;
-      tokens.push(text.substr(i, len));
-      i += len;
+      tokens.push(ch);
+      i++;
     } else {
       // Non-Chinese: grab until next Han char
       let j = i + 1;
@@ -191,8 +190,13 @@ export default function PodcastEpisode() {
           english: data.english || '',
           hskLevel: data.hskLevel ?? null,
         });
+      } else {
+        // Show the drawer even if no definition was found
+        setDrawerWord({ simplified: word, pinyin: '', english: '', hskLevel: null });
       }
-    } catch {}
+    } catch {
+      setDrawerWord({ simplified: word, pinyin: '', english: '', hskLevel: null });
+    }
     setLookingUp('');
   };
 
