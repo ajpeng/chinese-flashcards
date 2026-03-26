@@ -70,27 +70,27 @@ function timeAgo(iso: string): string {
 }
 
 const statusColor: Record<JobStatus, string> = {
-  processing: 'rgba(245,158,11,0.85)',
+  processing: 'rgb(180,120,0)',
   done: 'rgb(16,185,129)',
-  failed: 'rgb(239,68,68)',
+  failed: 'var(--primary)',
 };
 
 const statusBg: Record<JobStatus, string> = {
-  processing: 'rgba(245,158,11,0.08)',
+  processing: 'rgba(180,120,0,0.08)',
   done: 'rgba(16,185,129,0.08)',
-  failed: 'rgba(239,68,68,0.08)',
+  failed: 'rgba(97,0,0,0.06)',
 };
 
 const statusBorder: Record<JobStatus, string> = {
-  processing: 'rgba(245,158,11,0.25)',
-  done: 'rgba(16,185,129,0.25)',
-  failed: 'rgba(239,68,68,0.25)',
+  processing: 'rgba(180,120,0,0.2)',
+  done: 'rgba(16,185,129,0.2)',
+  failed: 'rgba(97,0,0,0.15)',
 };
 
 const statusLabel: Record<JobStatus, string> = {
-  processing: '⏳ Processing…',
-  done: '✅ Done',
-  failed: '❌ Failed',
+  processing: 'Processing…',
+  done: 'Done',
+  failed: 'Failed',
 };
 
 export default function Subtitles(): React.ReactElement {
@@ -173,6 +173,9 @@ export default function Subtitles(): React.ReactElement {
       });
 
       if (!res.ok) {
+        if (res.status === 413) {
+          throw new Error('File is too large for the server to accept. Please use a file under 500 MB.');
+        }
         const data = await res.json().catch(() => ({}));
         throw new Error(data.error || `Server error ${res.status}`);
       }
@@ -214,19 +217,19 @@ export default function Subtitles(): React.ReactElement {
 
   return (
     <div style={{ maxWidth: 680, margin: '0 auto' }}>
-      <h2 style={{ margin: '0 0 4px', fontSize: 'clamp(20px,4vw,26px)', fontWeight: 700, letterSpacing: '-0.02em' }}>
-        Subtitle Generator
-      </h2>
-      <p style={{ color: 'var(--muted-color)', marginBottom: 28, fontSize: 13 }}>
-        Upload an audio or video file and get a <code>.srt</code> subtitle file back.
-        Processing happens in the background; you can leave and come back.
-      </p>
+      <div className="page-header">
+        <h1 className="page-title">Subtitle Generator</h1>
+        <p className="page-subtitle">
+          Upload an audio or video file and get a <code style={{ fontSize: 12, background: 'var(--surface-container-low)', padding: '2px 6px', borderRadius: 4 }}>.srt</code> subtitle file.
+          Processing happens in the background — you can leave and come back.
+        </p>
+      </div>
 
       {/* Upload card */}
-      <div style={{ padding: '20px', border: '1px solid var(--border-color)', borderRadius: 12, background: 'var(--card-bg)', marginBottom: 24 }}>
+      <div className="ms-card" style={{ marginBottom: 24 }}>
         {/* Language selector */}
         <div style={{ marginBottom: 16 }}>
-          <label style={{ display: 'block', fontSize: 12, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--muted-color)', marginBottom: 8 }}>
+          <label className="section-label" style={{ display: 'block', marginBottom: 8 }}>
             Spoken Language
           </label>
           <select
@@ -234,9 +237,9 @@ export default function Subtitles(): React.ReactElement {
             onChange={e => setLanguage(e.target.value)}
             disabled={uploading}
             style={{
-              width: '100%', padding: '10px 12px', borderRadius: 8,
+              width: '100%', padding: '10px 12px', borderRadius: 4,
               border: '1px solid var(--border-color)',
-              background: 'var(--bg-secondary, rgba(128,128,128,0.06))',
+              background: 'var(--surface-container-low)',
               color: 'inherit', fontSize: 14, fontFamily: 'inherit', cursor: 'pointer',
             }}
           >
@@ -251,27 +254,21 @@ export default function Subtitles(): React.ReactElement {
           onDrop={handleDrop}
           onClick={() => !uploading && fileInputRef.current?.click()}
           style={{
-            border: `2px dashed ${dragOver ? 'rgba(59,130,246,0.7)' : 'var(--border-color)'}`,
-            borderRadius: 10,
-            padding: '32px 20px',
+            border: `2px dashed ${dragOver ? 'rgba(97,0,0,0.4)' : 'var(--border-color)'}`,
+            borderRadius: 8,
+            padding: '36px 20px',
             textAlign: 'center',
             cursor: uploading ? 'not-allowed' : 'pointer',
-            background: dragOver ? 'rgba(59,130,246,0.05)' : 'transparent',
+            background: dragOver ? 'rgba(97,0,0,0.04)' : 'var(--surface-container-low)',
             transition: 'border-color 0.15s, background 0.15s',
           }}
         >
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="audio/*,video/mp4"
-            onChange={handleFileInput}
-            style={{ display: 'none' }}
-          />
+          <input ref={fileInputRef} type="file" accept="audio/*,video/mp4" onChange={handleFileInput} style={{ display: 'none' }} />
           {uploading ? (
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
               <span style={{
-                width: 24, height: 24, border: '3px solid rgba(59,130,246,0.3)',
-                borderTopColor: 'rgba(59,130,246,0.85)', borderRadius: '50%',
+                width: 24, height: 24, border: '3px solid rgba(97,0,0,0.15)',
+                borderTopColor: 'var(--primary)', borderRadius: '50%',
                 display: 'inline-block', animation: 'spin 0.75s linear infinite',
               }} />
               <span style={{ fontSize: 14, color: 'var(--muted-color)' }}>Uploading…</span>
@@ -279,7 +276,7 @@ export default function Subtitles(): React.ReactElement {
           ) : (
             <>
               <div style={{ fontSize: 32, marginBottom: 8 }}>🎵</div>
-              <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>
+              <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4, fontFamily: "'Manrope', system-ui, sans-serif" }}>
                 Drop an audio file here, or click to browse
               </div>
               <div style={{ fontSize: 12, color: 'var(--muted-color)' }}>
@@ -290,7 +287,7 @@ export default function Subtitles(): React.ReactElement {
         </div>
 
         {uploadError && (
-          <div style={{ marginTop: 12, fontSize: 13, color: 'rgb(239,68,68)', padding: '10px 12px', borderRadius: 8, background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)' }}>
+          <div style={{ marginTop: 12, fontSize: 13, color: 'var(--primary)', padding: '10px 14px', borderRadius: 6, background: 'rgba(97,0,0,0.06)' }}>
             {uploadError}
           </div>
         )}
@@ -300,13 +297,8 @@ export default function Subtitles(): React.ReactElement {
       {jobs.length > 0 && (
         <div>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-            <span style={{ fontSize: 12, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--muted-color)' }}>
-              Recent Jobs
-            </span>
-            <button
-              onClick={() => setJobs([])}
-              style={{ fontSize: 12, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--muted-color)' }}
-            >
+            <span className="section-label">Recent Jobs</span>
+            <button onClick={() => setJobs([])} style={{ fontSize: 12, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--muted-color)' }}>
               Clear all
             </button>
           </div>
@@ -314,77 +306,50 @@ export default function Subtitles(): React.ReactElement {
             {jobs.map(job => (
               <div
                 key={job.jobId}
-                style={{
-                  padding: '14px 16px',
-                  borderRadius: 10,
-                  border: `1px solid ${statusBorder[job.status]}`,
-                  background: statusBg[job.status],
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: 8,
-                }}
+                className="ms-card"
+                style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 8 }}
               >
-                {/* Top row */}
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
                   <div style={{ minWidth: 0 }}>
-                    <div style={{ fontSize: 14, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    <div style={{ fontSize: 14, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: "'Manrope', system-ui, sans-serif" }}>
                       {job.filename}
                     </div>
                     <div style={{ fontSize: 12, color: 'var(--muted-color)', marginTop: 2 }}>
                       {LANGUAGES.find(l => l.value === job.language)?.label ?? job.language} · {timeAgo(job.createdAt)}
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>
-                      <code style={{ fontSize: 11, color: 'var(--muted-color)', fontFamily: 'monospace' }}>
-                        {job.jobId}
-                      </code>
-                      <button
-                        onClick={() => navigator.clipboard.writeText(job.jobId)}
-                        title="Copy job ID"
-                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--muted-color)', fontSize: 12, padding: '0 2px', lineHeight: 1 }}
-                      >
+                      <code style={{ fontSize: 11, color: 'var(--muted-color)', fontFamily: 'monospace' }}>{job.jobId}</code>
+                      <button onClick={() => navigator.clipboard.writeText(job.jobId)} title="Copy job ID" style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--muted-color)', fontSize: 12, padding: '0 2px', lineHeight: 1 }}>
                         📋
                       </button>
                     </div>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
                     <span style={{
-                      fontSize: 12, fontWeight: 600, padding: '3px 10px', borderRadius: 99,
+                      fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 99,
+                      letterSpacing: '0.06em', textTransform: 'uppercase',
                       color: statusColor[job.status],
                       background: statusBg[job.status],
-                      border: `1px solid ${statusBorder[job.status]}`,
                     }}>
                       {statusLabel[job.status]}
                     </span>
-                    <button
-                      onClick={() => removeJob(job.jobId)}
-                      title="Remove"
-                      style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--muted-color)', fontSize: 16, lineHeight: 1, padding: '2px 4px' }}
-                    >
-                      ×
-                    </button>
+                    <button onClick={() => removeJob(job.jobId)} title="Remove" style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--muted-color)', fontSize: 18, lineHeight: 1, padding: '2px 4px' }}>×</button>
                   </div>
                 </div>
 
                 {job.status === 'processing' && (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                    {/* Progress bar */}
-                    <div style={{ height: 6, borderRadius: 99, background: 'rgba(245,158,11,0.15)', overflow: 'hidden' }}>
+                    <div style={{ height: 4, borderRadius: 99, background: 'var(--surface-container-high)', overflow: 'hidden' }}>
                       <div style={{
-                        height: '100%',
-                        borderRadius: 99,
-                        background: 'rgba(245,158,11,0.85)',
+                        height: '100%', borderRadius: 99,
+                        background: 'linear-gradient(90deg, #610000, #8b0000)',
                         width: `${job.progressPct ?? 0}%`,
                         transition: 'width 1s ease',
-                        minWidth: job.progressPct ? undefined : '4%', // show a sliver even at 0%
+                        minWidth: job.progressPct ? undefined : '4%',
                       }} />
                     </div>
-                    {/* Labels */}
                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: 'var(--muted-color)' }}>
-                      <span>
-                        {job.progressPct
-                          ? `${job.progressPct}% transcribed`
-                          : 'Converting audio…'}
-                      </span>
+                      <span>{job.progressPct ? `${job.progressPct}% transcribed` : 'Converting audio…'}</span>
                       <span>{calcEta(job)}</span>
                     </div>
                   </div>
@@ -393,18 +358,15 @@ export default function Subtitles(): React.ReactElement {
                 {job.status === 'done' && job.srtContent && (
                   <button
                     onClick={() => downloadSrt(job.filename, job.srtContent!)}
-                    style={{
-                      alignSelf: 'flex-start', padding: '7px 14px', borderRadius: 7,
-                      border: 'none', background: 'rgba(16,185,129,0.85)', color: '#fff',
-                      fontSize: 13, fontWeight: 600, cursor: 'pointer',
-                    }}
+                    className="btn-primary"
+                    style={{ alignSelf: 'flex-start', fontSize: 13 }}
                   >
-                    ⬇ Download .srt
+                    ↓ Download .srt
                   </button>
                 )}
 
                 {job.status === 'failed' && job.error && (
-                  <div style={{ fontSize: 12, color: 'rgb(239,68,68)' }}>{job.error}</div>
+                  <div style={{ fontSize: 12, color: 'var(--primary)', background: 'rgba(97,0,0,0.06)', padding: '8px 12px', borderRadius: 4 }}>{job.error}</div>
                 )}
               </div>
             ))}

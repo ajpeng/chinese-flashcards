@@ -2,7 +2,7 @@
 
 A full-featured Mandarin learning platform with spaced repetition flashcards, interactive article reading, AI-powered vocabulary lookup, text-to-speech narration, speech practice, and subtitle generation.
 
-**Live:** https://ajpeng.github.io/chinese-flashcards *(repo rename to `mandarin-kit` pending)*
+**Live:** https://ajpeng.github.io/chinese-flashcards
 
 ---
 

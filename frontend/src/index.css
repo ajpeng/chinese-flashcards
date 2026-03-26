@@ -1,23 +1,51 @@
+/* ── Modern Scholar Design System ───────────────────────────────────────── */
 :root {
-  font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
+  /* Font: Manrope exclusively */
+  font-family: 'Manrope', system-ui, sans-serif;
   line-height: 1.5;
   font-weight: 400;
 
   color-scheme: light dark;
-  --text-color: rgba(255, 255, 255, 0.87);
-  --bg-color: #242424;
-  --muted-color: #bfbfbf;
-  --link-color: #646cff;
-  --button-bg: #1a1a1a;
-  --button-text: var(--text-color);
-  --card-bg: #1e1e1e;
-  --card-text: rgba(255, 255, 255, 0.87);
-  --border-color: rgba(255, 255, 255, 0.1);
-  --border-light: rgba(255, 255, 255, 0.05);
-  --popup-bg: #2a2a2a;
-  --popup-text: rgba(255, 255, 255, 0.87);
-  --popup-muted: rgba(255, 255, 255, 0.6);
-  --pinyin-color: rgba(255, 255, 255, 0.7);
+
+  /* Surface hierarchy (Parchment palette) */
+  --surface:                   #faf9f5;
+  --surface-container-low:     #f4f4f0;
+  --surface-container:         #efeeea;
+  --surface-container-high:    #e9e8e4;
+  --surface-container-highest: #e3e2df;
+  --surface-lowest:            #ffffff;
+
+  /* Primary: Cinnabar */
+  --primary:           #610000;
+  --primary-container: #8b0000;
+  --on-primary:        #ffffff;
+
+  /* Secondary: Cool Slate */
+  --secondary:           #545f72;
+  --secondary-container: #d5e0f7;
+
+  /* Outline */
+  --outline:         #8e706b;
+  --outline-variant: #e3beb8;
+
+  /* Semantic aliases */
+  --text-color:   #1b1c1a;
+  --bg-color:     var(--surface);
+  --muted-color:  #5a403c;
+  --link-color:   var(--primary);
+  --button-bg:    var(--surface-container-low);
+  --button-text:  var(--text-color);
+  --card-bg:      var(--surface-lowest);
+  --card-text:    var(--text-color);
+  --border-color: rgba(227, 190, 184, 0.2); /* outline_variant @ low opacity */
+  --border-light: rgba(227, 190, 184, 0.1);
+  --popup-bg:     var(--surface-lowest);
+  --popup-text:   var(--text-color);
+  --popup-muted:  var(--muted-color);
+  --pinyin-color: var(--secondary);
+
+  /* Ambient shadow — tinted with on-surface rather than grey */
+  --ambient-shadow: 0 8px 32px rgba(27, 28, 26, 0.06);
 
   color: var(--text-color);
   background-color: var(--bg-color);
@@ -28,13 +56,19 @@
   -moz-osx-font-smoothing: grayscale;
 }
 
+/* Manrope for headings too */
+h1, h2, h3, h4, h5, h6 {
+  font-family: 'Manrope', system-ui, sans-serif;
+  color: var(--text-color);
+}
+
 a {
   font-weight: 500;
   color: var(--link-color);
   text-decoration: inherit;
 }
 a:hover {
-  color: #535bf2;
+  color: var(--primary-container);
 }
 
 body {
@@ -49,31 +83,32 @@ h1 {
 }
 
 button {
-  border-radius: 8px;
+  border-radius: 4px;
   border: 1px solid transparent;
   padding: 0.6em 1.2em;
   font-size: 1em;
   font-weight: 500;
-  font-family: inherit;
+  font-family: 'Manrope', system-ui, sans-serif;
   background-color: var(--button-bg);
   color: var(--button-text);
   cursor: pointer;
-  transition: border-color 0.25s;
+  transition: background-color 0.2s;
 }
 button:hover {
-  border-color: #646cff;
+  background-color: var(--surface-container);
 }
 button:focus,
 button:focus-visible {
   outline: 4px auto -webkit-focus-ring-color;
 }
 
+/* Cards: no border — tonal layering only */
 .card {
   padding: 20px;
   border-radius: 12px;
-  border: 1px solid var(--border-color);
   background-color: var(--card-bg);
   color: var(--card-text);
+  box-shadow: var(--ambient-shadow);
   transition: box-shadow 0.2s ease;
 }
 
@@ -83,39 +118,96 @@ button:focus-visible {
   margin-top: 4px;
 }
 
-/* Explicit overrides when the user selects a theme manually with data-theme="light"/"dark" */
+/* OS dark mode fallback — must come BEFORE [data-theme] overrides so explicit
+   theme choices always win regardless of OS color scheme */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --surface:                   #1a1714;
+    --surface-container-low:     #201c18;
+    --surface-container:         #26211d;
+    --surface-container-high:    #2c2622;
+    --surface-container-highest: #322c27;
+    --surface-lowest:            #130f0d;
+    --primary:           #ffb4a8;
+    --primary-container: #920703;
+    --on-primary:        #3f0000;
+    --secondary:         #bcc7dd;
+    --secondary-container: #3c475a;
+    --text-color:   #e8e1d9;
+    --bg-color:     #1a1714;
+    --muted-color:  #c2a9a3;
+    --link-color:   #ffb4a8;
+    --button-bg:    #26211d;
+    --button-text:  #e8e1d9;
+    --card-bg:      #130f0d;
+    --card-text:    #e8e1d9;
+    --border-color: rgba(255, 255, 255, 0.07);
+    --border-light: rgba(255, 255, 255, 0.04);
+    --popup-bg:     #26211d;
+    --popup-text:   #e8e1d9;
+    --popup-muted:  #c2a9a3;
+    --pinyin-color: #bcc7dd;
+    --ambient-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  }
+}
+
+/* ── Explicit theme overrides — these come last so they always win ────────── */
 [data-theme="light"] {
-  --text-color: #213547;
-  --bg-color: #ffffff;
-  --muted-color: #666666;
-  --button-bg: #f9f9f9;
-  --button-text: #213547;
-  --link-color: #646cff;
-  --card-bg: #ffffff;
-  --card-text: #213547;
-  --border-color: rgba(0, 0, 0, 0.1);
-  --border-light: rgba(0, 0, 0, 0.05);
-  --popup-bg: #ffffff;
-  --popup-text: #111;
-  --popup-muted: #666;
-  --pinyin-color: #444;
+  --surface:                   #faf9f5;
+  --surface-container-low:     #f4f4f0;
+  --surface-container:         #efeeea;
+  --surface-container-high:    #e9e8e4;
+  --surface-container-highest: #e3e2df;
+  --surface-lowest:            #ffffff;
+  --primary:           #610000;
+  --primary-container: #8b0000;
+  --on-primary:        #ffffff;
+  --secondary:           #545f72;
+  --secondary-container: #d5e0f7;
+  --text-color:   #1b1c1a;
+  --bg-color:     #faf9f5;
+  --muted-color:  #5a403c;
+  --link-color:   #610000;
+  --button-bg:    #f4f4f0;
+  --button-text:  #1b1c1a;
+  --card-bg:      #ffffff;
+  --card-text:    #1b1c1a;
+  --border-color: rgba(227, 190, 184, 0.2);
+  --border-light: rgba(227, 190, 184, 0.1);
+  --popup-bg:     #ffffff;
+  --popup-text:   #1b1c1a;
+  --popup-muted:  #5a403c;
+  --pinyin-color: #545f72;
+  --ambient-shadow: 0 8px 32px rgba(27, 28, 26, 0.06);
 }
 
 [data-theme="dark"] {
-  --text-color: rgba(255, 255, 255, 0.87);
-  --bg-color: #242424;
-  --muted-color: #bfbfbf;
-  --button-bg: #1a1a1a;
-  --button-text: var(--text-color);
-  --link-color: #646cff;
-  --card-bg: #1e1e1e;
-  --card-text: rgba(255, 255, 255, 0.87);
-  --border-color: rgba(255, 255, 255, 0.1);
-  --border-light: rgba(255, 255, 255, 0.05);
-  --popup-bg: #2a2a2a;
-  --popup-text: rgba(255, 255, 255, 0.87);
-  --popup-muted: rgba(255, 255, 255, 0.6);
-  --pinyin-color: rgba(255, 255, 255, 0.7);
+  --surface:                   #1a1714;
+  --surface-container-low:     #201c18;
+  --surface-container:         #26211d;
+  --surface-container-high:    #2c2622;
+  --surface-container-highest: #322c27;
+  --surface-lowest:            #130f0d;
+  --primary:           #ffb4a8;
+  --primary-container: #920703;
+  --on-primary:        #3f0000;
+  --secondary:         #bcc7dd;
+  --secondary-container: #3c475a;
+  --text-color:   #e8e1d9;
+  --bg-color:     #1a1714;
+  --muted-color:  #c2a9a3;
+  --link-color:   #ffb4a8;
+  --button-bg:    #26211d;
+  --button-text:  #e8e1d9;
+  --card-bg:      #130f0d;
+  --card-text:    #e8e1d9;
+  --border-color: rgba(255, 255, 255, 0.07);
+  --border-light: rgba(255, 255, 255, 0.04);
+  --popup-bg:     #26211d;
+  --popup-text:   #e8e1d9;
+  --popup-muted:  #c2a9a3;
+  --pinyin-color: #bcc7dd;
+  --ambient-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
 }
 
 /* ── Layout ──────────────────────────────────────────────────────────────── */
@@ -132,31 +224,5 @@ button:focus-visible {
 
   .card {
     padding: 12px;
-  }
-}
-
-@media (prefers-color-scheme: light) {
-  :root {
-    --text-color: #213547;
-    --bg-color: #ffffff;
-    --muted-color: #666666;
-    --button-bg: #f9f9f9;
-    --button-text: #213547;
-    --link-color: #646cff;
-    --card-bg: #ffffff;
-    --card-text: #213547;
-    --border-color: rgba(0, 0, 0, 0.1);
-    --border-light: rgba(0, 0, 0, 0.05);
-    --popup-bg: #ffffff;
-    --popup-text: #111;
-    --popup-muted: #666;
-    --pinyin-color: #444;
-  }
-  a:hover {
-    color: #747bff;
-  }
-  button {
-    background-color: var(--button-bg);
-    color: var(--button-text);
   }
 }

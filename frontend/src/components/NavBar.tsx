@@ -12,6 +12,7 @@ function NavBar() {
   const [showSettings, setShowSettings] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
+  const userMenuRef = useRef<HTMLDivElement>(null)
 
   // Reset dropdowns when location changes
   useEffect(() => {
@@ -22,10 +23,11 @@ function NavBar() {
   // Close mobile menu / settings dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        setMenuOpen(false)
-        setShowSettings(false)
-      }
+      const target = e.target as Node
+      const outsideMobile = !menuRef.current || !menuRef.current.contains(target)
+      const outsideUserMenu = !userMenuRef.current || !userMenuRef.current.contains(target)
+      if (outsideMobile) setMenuOpen(false)
+      if (outsideUserMenu) setShowSettings(false)
     }
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
@@ -44,19 +46,20 @@ function NavBar() {
 
   const isActive = (path: string) => location.pathname === path
 
-  const activeBg = 'rgba(59, 130, 246, 0.2)'
+  const activeBg = 'rgba(97, 0, 0, 0.08)'
 
   const navLinkStyle = (path: string): React.CSSProperties => ({
     display: 'flex',
     alignItems: 'center',
     gap: 6,
     padding: '7px 12px',
-    borderRadius: '8px',
+    borderRadius: '4px',
     textDecoration: 'none',
-    color: isActive(path) ? 'var(--text-color)' : 'var(--muted-color)',
+    color: isActive(path) ? 'var(--primary)' : 'var(--muted-color)',
     backgroundColor: isActive(path) ? activeBg : 'transparent',
     fontSize: 14,
     fontWeight: isActive(path) ? 600 : 400,
+    fontFamily: "'Manrope', system-ui, sans-serif",
     whiteSpace: 'nowrap',
     transition: 'color 0.15s, background-color 0.15s',
   })
@@ -75,6 +78,9 @@ function NavBar() {
       <Link to="/subtitles" style={navLinkStyle('/subtitles')}>
         <span style={{ fontSize: 17 }}>💬</span> Subtitles
       </Link>
+      <Link to="/podcasts" style={navLinkStyle('/podcasts')}>
+        <span style={{ fontSize: 17 }}>🎙</span> Podcasts
+      </Link>
       {user && (
         <Link to="/new" style={navLinkStyle('/new')}>
           <span style={{ fontSize: 17 }}>✏️</span> New Article
@@ -91,7 +97,7 @@ function NavBar() {
         .navbar-hamburger { display: none; }
         .navbar-mobile-menu { display: none; }
 
-        @media (max-width: 700px) {
+        @media (max-width: 900px) {
           .navbar-desktop-nav { display: none; }
           .navbar-hamburger { display: flex; }
           .navbar-mobile-menu.open { display: flex; }
@@ -105,10 +111,10 @@ function NavBar() {
           alignItems: 'center',
           gap: 12,
           padding: '10px 20px',
-          borderBottom: '1px solid var(--border-color)',
-          backgroundColor: 'var(--bg-color)',
-          backdropFilter: 'blur(12px)',
-          WebkitBackdropFilter: 'blur(12px)',
+          backgroundColor: 'var(--surface-container-low)',
+          backdropFilter: 'blur(24px)',
+          WebkitBackdropFilter: 'blur(24px)',
+          boxShadow: '0 1px 0 rgba(97, 0, 0, 0.08), 0 2px 16px rgba(27, 28, 26, 0.07)',
           position: 'sticky',
           top: 0,
           zIndex: 100,
@@ -119,11 +125,11 @@ function NavBar() {
           <span style={{
             fontSize: 26,
             lineHeight: 1,
-            background: 'linear-gradient(135deg, rgba(59,130,246,0.9), rgba(168,85,247,0.9))',
+            background: 'linear-gradient(135deg, #610000, #8b0000)',
             WebkitBackgroundClip: 'text',
             WebkitTextFillColor: 'transparent',
             backgroundClip: 'text',
-            fontWeight: 700,
+            fontWeight: 800,
           }}>中</span>
           <h1 className="navbar-title" style={{ margin: 0, fontSize: 18, fontWeight: 700, letterSpacing: '-0.01em' }}>MandarinKit</h1>
         </Link>
@@ -139,11 +145,11 @@ function NavBar() {
             title={`Theme: ${theme}`}
             onClick={cycleTheme}
             style={{
-              border: '1px solid rgba(255,255,255,0.2)',
+              border: 'none',
               padding: '8px 12px',
               borderRadius: 6,
               cursor: 'pointer',
-              backgroundColor: 'transparent',
+              backgroundColor: 'var(--surface-container)',
               color: 'inherit',
               fontSize: 17,
               display: 'flex',
@@ -156,7 +162,7 @@ function NavBar() {
 
           {/* User menu / Login */}
           {user ? (
-            <div style={{ position: 'relative' }}>
+            <div ref={userMenuRef} style={{ position: 'relative' }}>
               <button
                 type="button"
                 aria-haspopup="true"
@@ -164,11 +170,11 @@ function NavBar() {
                 aria-controls="settings-menu"
                 onClick={() => setShowSettings(s => !s)}
                 style={{
-                  border: '1px solid rgba(255,255,255,0.2)',
+                  border: 'none',
                   padding: '8px 14px',
                   borderRadius: 6,
                   cursor: 'pointer',
-                  backgroundColor: 'transparent',
+                  backgroundColor: 'var(--surface-container)',
                   color: 'inherit',
                   display: 'flex',
                   alignItems: 'center',
@@ -206,7 +212,7 @@ function NavBar() {
                     to="/settings"
                     role="menuitem"
                     style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 16px', textDecoration: 'none', color: 'inherit', borderRadius: 4, margin: '2px 4px' }}
-                    onMouseEnter={e => { e.currentTarget.style.backgroundColor = 'rgba(100,108,255,0.1)' }}
+                    onMouseEnter={e => { e.currentTarget.style.backgroundColor = 'rgba(97,0,0,0.06)' }}
                     onMouseLeave={e => { e.currentTarget.style.backgroundColor = 'transparent' }}
                   >
                     <span style={{ fontSize: 16 }}>⚙️</span> Settings
@@ -230,11 +236,11 @@ function NavBar() {
               title="Login with Patreon"
               aria-label="Login with Patreon"
               style={{
-                border: '1px solid rgba(255,255,255,0.2)',
+                border: 'none',
                 padding: '8px 14px',
                 borderRadius: 6,
                 cursor: 'pointer',
-                backgroundColor: 'transparent',
+                backgroundColor: 'var(--surface-container)',
                 color: 'inherit',
                 textDecoration: 'none',
                 display: 'inline-flex',
@@ -261,11 +267,11 @@ function NavBar() {
             aria-label={`Theme: ${theme}`}
             onClick={cycleTheme}
             style={{
-              border: '1px solid rgba(255,255,255,0.2)',
+              border: 'none',
               padding: '8px 10px',
               borderRadius: 6,
               cursor: 'pointer',
-              backgroundColor: 'transparent',
+              backgroundColor: 'var(--surface-container)',
               color: 'inherit',
               fontSize: 17,
               display: 'flex',
@@ -282,11 +288,11 @@ function NavBar() {
             aria-expanded={menuOpen}
             onClick={() => setMenuOpen(o => !o)}
             style={{
-              border: '1px solid rgba(255,255,255,0.2)',
+              border: 'none',
               padding: '8px 10px',
               borderRadius: 6,
               cursor: 'pointer',
-              backgroundColor: menuOpen ? activeBg : 'transparent',
+              backgroundColor: menuOpen ? activeBg : 'var(--surface-container)',
               color: 'inherit',
               display: 'flex',
               flexDirection: 'column',
@@ -309,8 +315,11 @@ function NavBar() {
               top: '100%',
               left: 0,
               right: 0,
-              backgroundColor: 'var(--bg-color, #111)',
+              backgroundColor: 'var(--surface-container-low)',
+              backdropFilter: 'blur(24px)',
+              WebkitBackdropFilter: 'blur(24px)',
               borderBottom: '1px solid var(--border-color)',
+              boxShadow: '0 4px 16px rgba(27, 28, 26, 0.08)',
               flexDirection: 'column',
               padding: '8px 12px 12px',
               gap: 4,

@@ -126,32 +126,23 @@ export default function SpeechPractice(): React.ReactElement {
 
   return (
     <div style={{ maxWidth: 760, margin: '0 auto' }}>
-      <h2 style={{ margin: '0 0 4px', fontSize: 'clamp(20px,4vw,26px)', fontWeight: 700, letterSpacing: '-0.02em' }}>
-        Speech Practice
-      </h2>
-      <p style={{ color: 'var(--muted-color)', marginBottom: 28, fontSize: 13 }}>
-        Read the text aloud, then see exactly which characters you got right.
-      </p>
+      <div className="page-header">
+        <h1 className="page-title">Speech Practice</h1>
+        <p className="page-subtitle">Read the text aloud, then see exactly which characters you got right.</p>
+      </div>
 
       {/* Practice Text */}
-      <div style={{
-        marginBottom: 20,
-        padding: '18px 20px',
-        border: '1px solid var(--border-color)',
-        borderRadius: 12,
-        background: 'var(--card-bg)',
-      }}>
+      <div className="ms-card" style={{ marginBottom: 20 }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-          <span style={{ fontSize: 12, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--muted-color)' }}>
-            Practice Text
-          </span>
+          <span className="section-label">Practice Text</span>
           <button
             onClick={handleTextEdit}
             style={{
-              padding: '4px 10px', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer',
-              background: 'transparent',
-              border: `1px solid ${isEditingText ? 'rgba(220,38,38,0.5)' : 'var(--border-color)'}`,
-              color: isEditingText ? 'rgb(220,38,38)' : 'var(--muted-color)',
+              padding: '4px 12px', borderRadius: 4, fontSize: 12, fontWeight: 600, cursor: 'pointer',
+              background: isEditingText ? 'rgba(97,0,0,0.08)' : 'var(--surface-container-low)',
+              border: 'none',
+              color: isEditingText ? 'var(--primary)' : 'var(--muted-color)',
+              fontFamily: "'Manrope', system-ui, sans-serif",
             }}
           >
             {isEditingText ? 'Save' : 'Edit'}
@@ -167,14 +158,14 @@ export default function SpeechPractice(): React.ReactElement {
               autoFocus
               style={{
                 width: '100%', minHeight: 90, fontSize: '1.15em', lineHeight: 1.8,
-                padding: 12, borderRadius: 8, resize: 'vertical',
-                background: 'var(--bg-secondary, rgba(128,128,128,0.06))',
-                border: '1px solid rgba(100,108,255,0.4)',
+                padding: 12, borderRadius: 4, resize: 'vertical',
+                background: 'var(--surface-container-low)',
+                border: '1px solid rgba(97,0,0,0.2)',
                 color: 'inherit', fontFamily: 'inherit', boxSizing: 'border-box',
               }}
             />
             <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
-              <button onClick={cancelTextEdit} style={{ padding: '4px 10px', borderRadius: 6, fontSize: 12, cursor: 'pointer', background: 'transparent', border: '1px solid var(--border-color)', color: 'var(--muted-color)' }}>
+              <button onClick={cancelTextEdit} style={{ padding: '4px 10px', borderRadius: 4, fontSize: 12, cursor: 'pointer', background: 'var(--surface-container-low)', border: 'none', color: 'var(--muted-color)', fontFamily: "'Manrope', system-ui, sans-serif" }}>
                 Cancel
               </button>
               {exampleTexts.map((text, i) => (
@@ -182,9 +173,10 @@ export default function SpeechPractice(): React.ReactElement {
                   key={i}
                   onClick={() => setTempText(text)}
                   style={{
-                    padding: '4px 10px', borderRadius: 6, fontSize: 12, cursor: 'pointer',
-                    background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.3)',
-                    color: 'rgb(34,197,94)', maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                    padding: '4px 10px', borderRadius: 4, fontSize: 12, cursor: 'pointer',
+                    background: 'rgba(97,0,0,0.06)', border: 'none',
+                    color: 'var(--primary)', maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                    fontFamily: "'Manrope', system-ui, sans-serif",
                   }}
                   title={text}
                 >
@@ -211,24 +203,14 @@ export default function SpeechPractice(): React.ReactElement {
 
       {/* Pronunciation diff result */}
       {diff && (
-        <div style={{
-          marginBottom: 20,
-          padding: '18px 20px',
-          border: '1px solid var(--border-color)',
-          borderRadius: 12,
-          background: 'var(--card-bg)',
-        }}>
+        <div className="ms-card" style={{ marginBottom: 20 }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-            <span style={{ fontSize: 12, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--muted-color)' }}>
-              Result
-            </span>
+            <span className="section-label">Result</span>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-              {/* Score pill */}
               <span style={{
                 fontSize: 13, fontWeight: 700, padding: '3px 12px', borderRadius: 99,
-                background: score! >= 90 ? 'rgba(16,185,129,0.15)' : score! >= 70 ? 'rgba(245,158,11,0.15)' : 'rgba(239,68,68,0.15)',
-                color: score! >= 90 ? 'rgb(16,185,129)' : score! >= 70 ? 'rgb(245,158,11)' : 'rgb(239,68,68)',
-                border: `1px solid ${score! >= 90 ? 'rgba(16,185,129,0.3)' : score! >= 70 ? 'rgba(245,158,11,0.3)' : 'rgba(239,68,68,0.3)'}`,
+                background: score! >= 90 ? 'rgba(16,185,129,0.12)' : score! >= 70 ? 'rgba(245,158,11,0.12)' : 'rgba(97,0,0,0.08)',
+                color: score! >= 90 ? 'rgb(16,185,129)' : score! >= 70 ? 'rgb(180,120,0)' : 'var(--primary)',
               }}>
                 {score}%
               </span>
@@ -238,44 +220,31 @@ export default function SpeechPractice(): React.ReactElement {
             </div>
           </div>
 
-          {/* Character-by-character diff */}
           <div style={{ fontSize: '1.5em', lineHeight: 2.2, letterSpacing: '0.04em', flexWrap: 'wrap', display: 'flex', gap: '0 2px' }}>
             {diff.map((token, i) => {
               if (token.status === 'correct') {
-                return (
-                  <span key={i} style={{ color: 'rgb(16,185,129)', position: 'relative' }} title="Correct">
-                    {token.expected}
-                  </span>
-                );
+                return <span key={i} style={{ color: 'rgb(16,185,129)' }} title="Correct">{token.expected}</span>;
               }
               if (token.status === 'missing') {
                 return (
-                  <span key={i} title="Missing" style={{ position: 'relative', display: 'inline-flex', flexDirection: 'column', alignItems: 'center' }}>
-                    <span style={{ color: 'rgb(239,68,68)', textDecoration: 'underline wavy rgb(239,68,68)' }}>
-                      {token.expected}
-                    </span>
-                    <span style={{ fontSize: '0.4em', color: 'rgb(239,68,68)', lineHeight: 1, whiteSpace: 'nowrap' }}>missed</span>
+                  <span key={i} title="Missing" style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'center' }}>
+                    <span style={{ color: 'rgb(220,38,38)', textDecoration: 'underline wavy rgb(220,38,38)' }}>{token.expected}</span>
+                    <span style={{ fontSize: '0.4em', color: 'rgb(220,38,38)', lineHeight: 1, whiteSpace: 'nowrap' }}>missed</span>
                   </span>
                 );
               }
               if (token.status === 'wrong') {
                 return (
-                  <span key={i} title={`Expected: ${token.expected} — You said: ${token.got}`} style={{ position: 'relative', display: 'inline-flex', flexDirection: 'column', alignItems: 'center' }}>
-                    <span style={{ color: 'rgb(245,158,11)', textDecoration: 'underline wavy rgb(245,158,11)' }}>
-                      {token.expected}
-                    </span>
-                    <span style={{ fontSize: '0.4em', color: 'rgb(245,158,11)', lineHeight: 1, whiteSpace: 'nowrap' }}>
-                      ← {token.got}
-                    </span>
+                  <span key={i} title={`Expected: ${token.expected} — You said: ${token.got}`} style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'center' }}>
+                    <span style={{ color: 'rgb(180,120,0)', textDecoration: 'underline wavy rgb(180,120,0)' }}>{token.expected}</span>
+                    <span style={{ fontSize: '0.4em', color: 'rgb(180,120,0)', lineHeight: 1, whiteSpace: 'nowrap' }}>← {token.got}</span>
                   </span>
                 );
               }
               if (token.status === 'extra') {
                 return (
-                  <span key={i} title={`Extra: ${token.got}`} style={{ position: 'relative', display: 'inline-flex', flexDirection: 'column', alignItems: 'center', opacity: 0.5 }}>
-                    <span style={{ color: 'var(--muted-color)', fontSize: '0.85em' }}>
-                      ({token.got})
-                    </span>
+                  <span key={i} title={`Extra: ${token.got}`} style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'center', opacity: 0.5 }}>
+                    <span style={{ color: 'var(--muted-color)', fontSize: '0.85em' }}>({token.got})</span>
                   </span>
                 );
               }
@@ -283,23 +252,13 @@ export default function SpeechPractice(): React.ReactElement {
             })}
           </div>
 
-          {/* Legend */}
           <div style={{ display: 'flex', gap: 16, marginTop: 14, flexWrap: 'wrap', fontSize: 12 }}>
-            <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-              <span style={{ color: 'rgb(16,185,129)', fontWeight: 700 }}>字</span> Correct
-            </span>
-            <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-              <span style={{ color: 'rgb(239,68,68)', fontWeight: 700 }}>字</span> Missed
-            </span>
-            <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-              <span style={{ color: 'rgb(245,158,11)', fontWeight: 700 }}>字</span> Wrong character
-            </span>
-            <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-              <span style={{ color: 'var(--muted-color)' }}>字</span> Extra
-            </span>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}><span style={{ color: 'rgb(16,185,129)', fontWeight: 700 }}>字</span> Correct</span>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}><span style={{ color: 'rgb(220,38,38)', fontWeight: 700 }}>字</span> Missed</span>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}><span style={{ color: 'rgb(180,120,0)', fontWeight: 700 }}>字</span> Wrong</span>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}><span style={{ color: 'var(--muted-color)' }}>字</span> Extra</span>
           </div>
 
-          {/* What you said */}
           {transcriptionResult && (
             <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid var(--border-light)', fontSize: 13, color: 'var(--muted-color)' }}>
               You said: <span style={{ color: 'var(--text-color)' }}>{transcriptionResult}</span>

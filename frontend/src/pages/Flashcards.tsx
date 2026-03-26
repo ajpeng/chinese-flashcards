@@ -907,10 +907,10 @@ export default function Flashcards() {
 
   return (
     <div style={{ maxWidth: 800, margin: '0 auto', padding: '0 16px' }}>
-      <h2 style={{ marginBottom: 8 }}>HSK Flashcard Decks</h2>
-      <p style={{ color: 'var(--muted-color)', marginBottom: 24 }}>
-        Spaced repetition study for all HSK vocabulary levels.
-      </p>
+      <div className="page-header">
+        <h1 className="page-title">HSK Flashcard Decks</h1>
+        <p className="page-subtitle">Spaced repetition study for all HSK vocabulary levels.</p>
+      </div>
 
       {decksError && (
         <div

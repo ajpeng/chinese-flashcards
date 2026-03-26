@@ -8,84 +8,95 @@ import Settings from './pages/Settings'
 import Flashcards from './pages/Flashcards'
 import WordDetail from './pages/WordDetail'
 import Subtitles from './pages/Subtitles'
+import Podcasts from './pages/Podcasts'
+import PodcastEpisode from './pages/PodcastEpisode'
 import { AuthProvider } from './contexts/AuthContext'
 import ProtectedRoute from './components/ProtectedRoute'
 import NavBar from './components/NavBar'
 
-const FEATURES = [
-  {
-    icon: '📚',
-    title: 'Interactive Articles',
-    description: 'Read real Chinese text with instant word definitions. Tap any word to hear pronunciation and see pinyin.',
-    href: '/articles',
-    label: 'Browse Articles',
-    color: 'rgba(59, 130, 246, 0.85)',
-    accent: 'rgba(59, 130, 246, 0.12)',
-  },
-  {
-    icon: '🃏',
-    title: 'HSK Flashcard Decks',
-    description: 'Master all 5,000 HSK vocabulary words with spaced repetition. Six levels from beginner to proficient.',
-    href: '/flashcards',
-    label: 'Start Studying',
-    color: 'rgba(168, 85, 247, 0.85)',
-    accent: 'rgba(168, 85, 247, 0.12)',
-  },
-  {
-    icon: '🎤',
-    title: 'Speech Practice',
-    description: 'Practice speaking and train your ear with high-quality Azure neural voices at adjustable speeds.',
-    href: '/speech-practice',
-    label: 'Practice Speaking',
-    color: 'rgba(16, 185, 129, 0.85)',
-    accent: 'rgba(16, 185, 129, 0.12)',
-  },
-  {
-    icon: '💬',
-    title: 'Subtitle Generator',
-    description: 'Upload any audio or video file and get a ready-to-use .srt subtitle file powered by OpenAI Whisper.',
-    href: '/subtitles',
-    label: 'Generate Subtitles',
-    color: 'rgba(245, 158, 11, 0.85)',
-    accent: 'rgba(245, 158, 11, 0.12)',
-  },
-]
-
 function Home() {
   return (
     <div className="home">
-      {/* Hero */}
-      <div className="home-hero">
-        <div className="home-hero-char" aria-hidden="true">中</div>
-        <h1 className="home-hero-title">MandarinKit</h1>
-        <p className="home-hero-sub">
-          Master Mandarin with interactive articles, spaced-repetition flashcards,
-          AI-powered speech practice, and subtitle generation all in one place.
-        </p>
-        <div className="home-hero-actions">
-          <Link to="/articles" className="home-btn home-btn-primary">Get Started →</Link>
-          <Link to="/flashcards" className="home-btn home-btn-secondary">View HSK Decks</Link>
+
+      {/* Page header */}
+      <div className="home-page-header">
+        <div>
+          <h1 className="home-page-title">Welcome to MandarinKit</h1>
+          <p className="home-page-sub">Your scholarly path to Mandarin mastery.</p>
         </div>
+        <Link to="/articles" className="home-btn home-btn-primary">Get Started →</Link>
       </div>
 
-      {/* Feature cards */}
-      <div className="home-features">
-        {FEATURES.map(f => (
-          <div key={f.href} className="home-feature-card" style={{ '--accent': f.accent } as React.CSSProperties}>
-            <div className="home-feature-icon" style={{ background: f.accent }}>
-              <span>{f.icon}</span>
+      {/* Bento grid */}
+      <div className="home-bento">
+
+        {/* Featured card — full dark primary bg, 8-col */}
+        <div className="home-bento-featured">
+          <div className="home-hanzi-grid-bg" aria-hidden="true" />
+          <div className="home-bento-featured-inner">
+            <span className="home-label-chip">Start Learning</span>
+            <h2 className="home-bento-featured-title">Interactive Article Reader</h2>
+            <p className="home-bento-featured-desc">
+              Read real Chinese text with instant definitions. Tap any word to hear pronunciation, see pinyin, and save to your study deck.
+            </p>
+            <div className="home-bento-featured-actions">
+              <Link to="/articles" className="home-btn-featured">Browse Articles →</Link>
+              <span className="home-bento-featured-meta">HSK 1–6 · Graded reading</span>
             </div>
-            <h3 className="home-feature-title">{f.title}</h3>
-            <p className="home-feature-desc">{f.description}</p>
-            <Link
-              to={f.href}
-              className="home-feature-link"
-              style={{ color: f.color }}
-            >
-              {f.label} →
-            </Link>
           </div>
-        ))}
+          <div className="home-bento-featured-char" aria-hidden="true">文</div>
+        </div>
+
+        {/* Flashcards — 4-col */}
+        <Link to="/flashcards" className="home-bento-card home-bento-card-accent">
+          <span className="home-label-chip home-label-chip-light">5,000+ Words</span>
+          <div className="home-bento-card-icon">🃏</div>
+          <h3 className="home-bento-card-title">HSK Flashcard Decks</h3>
+          <p className="home-bento-card-desc">Six levels of spaced-repetition vocabulary from beginner to proficient.</p>
+          <span className="home-bento-card-link">Start Studying →</span>
+        </Link>
+
+        {/* Speech Practice — 4-col */}
+        <Link to="/speech-practice" className="home-bento-card">
+          <span className="home-label-chip">AI Powered</span>
+          <div className="home-bento-card-icon">🎤</div>
+          <h3 className="home-bento-card-title">Speech Practice</h3>
+          <p className="home-bento-card-desc">Read aloud and get instant character-by-character pronunciation feedback.</p>
+          <span className="home-bento-card-link">Practice Speaking →</span>
+        </Link>
+
+        {/* Character of the day — 4-col */}
+        <div className="home-bento-card home-bento-char-card">
+          <p className="home-bento-char-label">Character Focus</p>
+          <div className="home-bento-char-display">
+            <span className="home-bento-char">学</span>
+            <div className="home-hanzi-grid-bg home-hanzi-grid-bg--card" aria-hidden="true" />
+          </div>
+          <div>
+            <p className="home-bento-char-pinyin">xué</p>
+            <p className="home-bento-char-meaning">To study, to learn</p>
+            <p className="home-bento-char-meta">8 strokes · Radical: 子</p>
+          </div>
+        </div>
+
+        {/* Subtitle Generator — 4-col */}
+        <Link to="/subtitles" className="home-bento-card">
+          <span className="home-label-chip">Powered by Whisper</span>
+          <div className="home-bento-card-icon">💬</div>
+          <h3 className="home-bento-card-title">Subtitle Generator</h3>
+          <p className="home-bento-card-desc">Upload audio or video and get a ready-to-use .srt subtitle file.</p>
+          <span className="home-bento-card-link">Generate Subtitles →</span>
+        </Link>
+
+        {/* Podcasts — 4-col */}
+        <Link to="/podcasts" className="home-bento-card">
+          <span className="home-label-chip">Synchronized</span>
+          <div className="home-bento-card-icon">🎙</div>
+          <h3 className="home-bento-card-title">Podcast Player</h3>
+          <p className="home-bento-card-desc">Mandarin podcasts with dual Chinese/English subtitles and clickable words.</p>
+          <span className="home-bento-card-link">Browse Podcasts →</span>
+        </Link>
+
       </div>
 
       {/* Stats strip */}
@@ -133,6 +144,16 @@ function Layout() {
           } />
           <Route path="/words/:word" element={<WordDetail />} />
           <Route path="/subtitles" element={<Subtitles />} />
+          <Route path="/podcasts" element={
+            <ProtectedRoute>
+              <Podcasts />
+            </ProtectedRoute>
+          } />
+          <Route path="/podcasts/:podcastId/episodes/:episodeId" element={
+            <ProtectedRoute>
+              <PodcastEpisode />
+            </ProtectedRoute>
+          } />
           <Route path="/health" element={<Health />} />
         </Routes>
       </main>

@@ -890,16 +890,14 @@ export default function Articles(): React.ReactElement {
 
       <div style={{ maxWidth: 800, margin: '0 auto' }}>
         {/* Page header */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24, flexWrap: 'wrap', gap: 10 }}>
-          <div>
-            <h2 style={{ margin: 0, fontSize: 'clamp(20px,4vw,26px)', fontWeight: 700, letterSpacing: '-0.02em' }}>Articles</h2>
-            <p style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--muted-color)' }}>
-              Click any word for definition · double-click to read from there
-            </p>
+        <div className="page-header">
+          <div className="page-header-row">
+            <h1 className="page-title">Articles</h1>
+            <button onClick={fetchArticles} disabled={loading} className="btn-secondary" style={{ fontSize: 13 }}>
+              {loading ? '⟳ Loading…' : '⟳ Refresh'}
+            </button>
           </div>
-          <button onClick={fetchArticles} disabled={loading} className="article-list-btn article-list-btn-ghost" style={{ border: '1px solid var(--border-color)' }}>
-            {loading ? '⟳ Loading…' : '⟳ Refresh'}
-          </button>
+          <p className="page-subtitle">Click any word for definition · double-click to read from there</p>
         </div>
 
         {/* Settings bar — always visible */}
