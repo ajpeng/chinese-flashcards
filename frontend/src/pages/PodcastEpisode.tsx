@@ -56,6 +56,13 @@ function findActiveCue(cues: SrtCue[], timeMs: number): SrtCue | null {
   return null;
 }
 
+function findActiveCueIndex(cues: SrtCue[], timeMs: number): number {
+  for (let i = 0; i < cues.length; i++) {
+    if (timeMs >= cues[i].startMs && timeMs <= cues[i].endMs) return i;
+  }
+  return -1;
+}
+
 // Tokenize a Chinese string into clickable spans.
 // Each Han character is its own token so every character has a CC-CEDICT entry.
 // Non-Han runs (punctuation, spaces, Latin) are grouped as single non-clickable tokens.
@@ -67,7 +74,6 @@ function tokenizeZh(text: string): string[] {
       tokens.push(ch);
       i++;
     } else {
-      // Non-Chinese: grab until next Han char
       let j = i + 1;
       while (j < text.length && !/[\u4E00-\u9FFF\u3400-\u4DBF]/.test(text[j])) j++;
       tokens.push(text.slice(i, j));
@@ -112,6 +118,10 @@ export default function PodcastEpisode() {
   const [pollingStatus, setPollingStatus] = useState(false);
 
   const audioRef = useRef<HTMLAudioElement>(null);
+
+  // Keep refs in sync so keyboard callbacks always see fresh values without stale closures
+  const zhCuesRef = useRef<SrtCue[]>([]);
+  useEffect(() => { zhCuesRef.current = zhCues; }, [zhCues]);
 
   const headers = {
     'Content-Type': 'application/json',
@@ -191,7 +201,6 @@ export default function PodcastEpisode() {
           hskLevel: data.hskLevel ?? null,
         });
       } else {
-        // Show the drawer even if no definition was found
         setDrawerWord({ simplified: word, pinyin: '', english: '', hskLevel: null });
       }
     } catch {
@@ -207,16 +216,92 @@ export default function PodcastEpisode() {
     audioRef.current.currentTime = pct * duration;
   };
 
-  const togglePlay = () => {
+  // Use audioRef directly (not `playing` state) to avoid stale closures in keyboard handler
+  const togglePlay = useCallback(() => {
     if (!audioRef.current) return;
-    if (playing) audioRef.current.pause();
-    else audioRef.current.play();
-  };
+    if (audioRef.current.paused) audioRef.current.play();
+    else audioRef.current.pause();
+  }, []);
+
+  // ── Subtitle / time navigation ──────────────────────────────────────────────
+
+  const goNextCue = useCallback(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    const cues = zhCuesRef.current;
+    if (!cues.length) {
+      // No subtitles — skip forward 5s
+      audio.currentTime = Math.min(audio.currentTime + 5, audio.duration || audio.currentTime);
+      return;
+    }
+    const ms = audio.currentTime * 1000;
+    const nextIdx = cues.findIndex(c => c.startMs > ms);
+    if (nextIdx >= 0) audio.currentTime = cues[nextIdx].startMs / 1000;
+  }, []);
+
+  const goPrevCue = useCallback(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    const cues = zhCuesRef.current;
+    if (!cues.length) {
+      // No subtitles — skip back 5s
+      audio.currentTime = Math.max(audio.currentTime - 5, 0);
+      return;
+    }
+    const ms = audio.currentTime * 1000;
+    const activeIdx = findActiveCueIndex(cues, ms);
+    // If we're > 1s into the current cue, replay it; otherwise go to previous
+    if (activeIdx >= 0 && ms - cues[activeIdx].startMs > 1000) {
+      audio.currentTime = cues[activeIdx].startMs / 1000;
+    } else {
+      const prevIdx = activeIdx > 0 ? activeIdx - 1 : 0;
+      audio.currentTime = cues[prevIdx].startMs / 1000;
+    }
+  }, []);
+
+  const replayCue = useCallback(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    const cues = zhCuesRef.current;
+    if (!cues.length) {
+      audio.currentTime = Math.max(audio.currentTime - 5, 0);
+      return;
+    }
+    const ms = audio.currentTime * 1000;
+    const activeIdx = findActiveCueIndex(cues, ms);
+    if (activeIdx >= 0) {
+      audio.currentTime = cues[activeIdx].startMs / 1000;
+    } else {
+      // Between cues — find the most recent cue
+      let prev = 0;
+      for (let i = cues.length - 1; i >= 0; i--) {
+        if (cues[i].startMs <= ms) { prev = i; break; }
+      }
+      audio.currentTime = cues[prev].startMs / 1000;
+    }
+  }, []);
+
+  // ── Keyboard handler ─────────────────────────────────────────────────────────
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      // Don't intercept when user is typing in an input
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      switch (e.key) {
+        case 'ArrowRight': e.preventDefault(); goNextCue(); break;
+        case 'ArrowLeft':  e.preventDefault(); goPrevCue(); break;
+        case 'ArrowUp':    e.preventDefault(); replayCue(); break;
+        case ' ':          e.preventDefault(); togglePlay(); break;
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [goNextCue, goPrevCue, replayCue, togglePlay]);
 
   if (loading) return <div style={{ padding: 40, color: 'var(--muted-color)' }}>Loading…</div>;
   if (error || !episode) return <div style={{ padding: 40, color: 'rgb(239,68,68)' }}>{error || 'Episode not found.'}</div>;
 
   const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
+  const hasCues = zhCues.length > 0;
 
   return (
     <div style={{ maxWidth: 800, margin: '0 auto', padding: '24px 20px 80px' }}>
@@ -278,7 +363,7 @@ export default function PodcastEpisode() {
           onClick={seek}
           style={{
             height: 6, borderRadius: 3, background: 'var(--border-color)',
-            cursor: 'pointer', position: 'relative',
+            cursor: 'pointer', position: 'relative', marginBottom: 20,
           }}
         >
           <div style={{
@@ -287,6 +372,36 @@ export default function PodcastEpisode() {
             width: `${progress}%`,
             transition: 'width 0.2s linear',
           }} />
+        </div>
+
+        {/* Navigation controls */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
+          {/* Prev cue / skip back */}
+          <button
+            onClick={goPrevCue}
+            title={hasCues ? 'Previous subtitle (←)' : 'Skip back 5s (←)'}
+            style={navBtnStyle}
+          >
+            {hasCues ? '⏮ Prev' : '−5s'}
+          </button>
+
+          {/* Replay cue */}
+          <button
+            onClick={replayCue}
+            title={hasCues ? 'Replay subtitle (↑)' : 'Skip back 5s (↑)'}
+            style={{ ...navBtnStyle, background: 'rgba(59,130,246,0.1)', color: 'rgba(59,130,246,0.9)', borderColor: 'rgba(59,130,246,0.25)' }}
+          >
+            ↩ Replay
+          </button>
+
+          {/* Next cue / skip forward */}
+          <button
+            onClick={goNextCue}
+            title={hasCues ? 'Next subtitle (→)' : 'Skip forward 5s (→)'}
+            style={navBtnStyle}
+          >
+            {hasCues ? 'Next ⏭' : '+5s'}
+          </button>
         </div>
       </div>
 
@@ -323,14 +438,14 @@ export default function PodcastEpisode() {
       )}
 
       {/* Dual subtitle display */}
-      {zhCues.length > 0 && (
+      {hasCues && (
         <div style={{
           background: 'var(--card-bg)', border: '1px solid var(--border-color)',
           borderRadius: 12, padding: '28px 24px',
           minHeight: 140,
           display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 16,
         }}>
-          {/* Chinese subtitle — clickable words */}
+          {/* Chinese subtitle — clickable characters */}
           <div style={{ textAlign: 'center', minHeight: 48 }}>
             {activeZh ? (
               <div style={{ fontSize: 'clamp(22px, 5vw, 30px)', lineHeight: 1.5, letterSpacing: '0.03em' }}>
@@ -376,9 +491,9 @@ export default function PodcastEpisode() {
             ) : null}
           </div>
 
-          {/* Hint */}
+          {/* Keyboard hint */}
           <div style={{ textAlign: 'center', fontSize: 11, color: 'rgba(128,128,128,0.4)' }}>
-            Tap any Chinese word for definition
+            Tap any character for definition · ← prev · ↑ replay · → next · Space play/pause
           </div>
         </div>
       )}
@@ -391,3 +506,15 @@ export default function PodcastEpisode() {
     </div>
   );
 }
+
+const navBtnStyle: React.CSSProperties = {
+  padding: '7px 16px',
+  borderRadius: 8,
+  border: '1px solid var(--border-color)',
+  background: 'transparent',
+  color: 'var(--muted-color)',
+  fontSize: 13,
+  fontWeight: 600,
+  cursor: 'pointer',
+  userSelect: 'none',
+};
