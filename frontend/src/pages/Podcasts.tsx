@@ -69,7 +69,7 @@ function StatusBadge({ status }: { status: string }) {
 }
 
 export default function Podcasts() {
-  const { token } = useAuth() as any;
+  const { accessToken: token } = useAuth() as any;
   const navigate = useNavigate();
 
   const [podcasts, setPodcasts] = useState<Podcast[]>([]);
