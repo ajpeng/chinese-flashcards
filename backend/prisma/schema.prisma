@@ -15,6 +15,7 @@ model User {
   email         String      @unique
   passwordHash  String      @default("") // empty for OAuth-only users
   patreonId     String?     @unique       // Patreon user ID (null for legacy email/pw users)
+  googleId      String?     @unique       // Google user sub (null for non-Google users)
   name          String?
   emailVerified DateTime?
   pinyinStyle   String      @default("marks") // "marks" or "numbers"
@@ -31,6 +32,7 @@ model User {
 
   @@index([email])
   @@index([patreonId])
+  @@index([googleId])
 }
 
 model Article {

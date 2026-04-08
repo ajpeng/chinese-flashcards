@@ -141,6 +141,134 @@ router.get('/patreon/callback', async (req: Request, res: Response) => {
 });
 
 // ---------------------------------------------------------------------------
+// Google OAuth 2.0
+// ---------------------------------------------------------------------------
+
+// GET /api/auth/google – redirect user to Google authorisation page
+router.get('/google', (_req: Request, res: Response) => {
+  const clientId = process.env.GOOGLE_CLIENT_ID;
+  const redirectUri = process.env.GOOGLE_REDIRECT_URI;
+
+  if (!clientId || !redirectUri) {
+    res.status(500).json({ error: 'Google OAuth is not configured on the server.' });
+    return;
+  }
+
+  const params = new URLSearchParams({
+    response_type: 'code',
+    client_id: clientId,
+    redirect_uri: redirectUri,
+    scope: 'openid email profile',
+  });
+
+  res.redirect(`https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`);
+});
+
+// GET /api/auth/google/callback – Google redirects back here with ?code=…
+router.get('/google/callback', async (req: Request, res: Response) => {
+  const code = req.query.code as string | undefined;
+  const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+  const basePath = process.env.FRONTEND_BASE_PATH || '/chinese-flashcards';
+  const frontendBase = `${frontendUrl}${basePath}`;
+
+  if (!code) {
+    res.redirect(`${frontendBase}?error=google_oauth_missing_code`);
+    return;
+  }
+
+  try {
+    const clientId = process.env.GOOGLE_CLIENT_ID!;
+    const clientSecret = process.env.GOOGLE_CLIENT_SECRET!;
+    const redirectUri = process.env.GOOGLE_REDIRECT_URI!;
+
+    // Exchange authorisation code for tokens
+    const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        code,
+        grant_type: 'authorization_code',
+        client_id: clientId,
+        client_secret: clientSecret,
+        redirect_uri: redirectUri,
+      }),
+    });
+
+    if (!tokenRes.ok) {
+      const errBody = await tokenRes.text();
+      logger.error({ errBody }, 'Google token exchange failed');
+      res.redirect(`${frontendBase}?error=google_token_exchange_failed`);
+      return;
+    }
+
+    const tokenData = await tokenRes.json() as { access_token: string };
+
+    // Fetch the Google user info
+    const userInfoRes = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
+      headers: { Authorization: `Bearer ${tokenData.access_token}` },
+    });
+
+    if (!userInfoRes.ok) {
+      res.redirect(`${frontendBase}?error=google_identity_failed`);
+      return;
+    }
+
+    const userInfo = await userInfoRes.json() as {
+      id: string;
+      email: string;
+      name?: string;
+    };
+
+    const googleId = userInfo.id;
+    const email = userInfo.email;
+    const name = userInfo.name || null;
+
+    // Upsert user – find by googleId or email, create if new
+    let user = await prisma.user.findFirst({
+      where: {
+        OR: [
+          { googleId },
+          { email },
+        ],
+      },
+    });
+
+    if (user) {
+      if (!user.googleId) {
+        user = await prisma.user.update({
+          where: { id: user.id },
+          data: { googleId, name: user.name || name },
+        });
+      }
+    } else {
+      user = await prisma.user.create({
+        data: {
+          email,
+          name,
+          googleId,
+          passwordHash: '', // not used for OAuth users
+        },
+      });
+    }
+
+    const accessToken = generateAccessToken({ userId: user.id, email: user.email });
+    const refreshToken = generateRefreshToken({ userId: user.id, email: user.email });
+
+    res.cookie('refreshToken', refreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
+    });
+
+    res.redirect(`${frontendBase}/?token=${encodeURIComponent(accessToken)}`);
+  } catch (error) {
+    logger.error({ err: error }, 'Google OAuth callback error');
+    res.redirect(`${frontendBase}?error=google_oauth_error`);
+  }
+});
+
+// ---------------------------------------------------------------------------
 // Shared endpoints (logout, me, refresh, settings)
 // ---------------------------------------------------------------------------
 

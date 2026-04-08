@@ -231,10 +231,8 @@ function NavBar() {
               )}
             </div>
           ) : (
-            <a
-              href={`${(import.meta as any).env.VITE_API_URL || 'https://api.ajpeng.ca'}/api/auth/patreon`}
-              title="Login with Patreon"
-              aria-label="Login with Patreon"
+            <Link
+              to="/login"
               style={{
                 border: 'none',
                 padding: '8px 14px',
@@ -250,12 +248,8 @@ function NavBar() {
                 fontSize: 14,
               }}
             >
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 569 546" width="15" height="15" aria-hidden="true">
-                <circle cx="363" cy="205" r="205" fill="#FF424D" />
-                <rect x="0" y="0" width="112" height="546" fill="#052D49" />
-              </svg>
-              Login
-            </a>
+              Sign in
+            </Link>
           )}
         </nav>
 
@@ -360,16 +354,9 @@ function NavBar() {
                 </button>
               </>
             ) : (
-              <a
-                href={`${(import.meta as any).env.VITE_API_URL || 'https://api.ajpeng.ca'}/api/auth/patreon`}
-                style={{ ...navLinkStyle(''), justifyContent: 'flex-start' }}
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 569 546" width="16" height="16" aria-hidden="true" style={{ flexShrink: 0 }}>
-                  <circle cx="363" cy="205" r="205" fill="#FF424D" />
-                  <rect x="0" y="0" width="112" height="546" fill="#052D49" />
-                </svg>
-                Login with Patreon
-              </a>
+              <Link to="/login" style={{ ...navLinkStyle('/login'), justifyContent: 'flex-start' }}>
+                Sign in
+              </Link>
             )}
           </div>
         </div>

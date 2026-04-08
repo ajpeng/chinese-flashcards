@@ -10,6 +10,7 @@ import WordDetail from './pages/WordDetail'
 import Subtitles from './pages/Subtitles'
 import Podcasts from './pages/Podcasts'
 import PodcastEpisode from './pages/PodcastEpisode'
+import Login from './pages/Login'
 import { AuthProvider } from './contexts/AuthContext'
 import ProtectedRoute from './components/ProtectedRoute'
 import NavBar from './components/NavBar'
@@ -154,6 +155,7 @@ function Layout() {
               <PodcastEpisode />
             </ProtectedRoute>
           } />
+          <Route path="/login" element={<Login />} />
           <Route path="/health" element={<Health />} />
         </Routes>
       </main>

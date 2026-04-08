@@ -20,6 +20,7 @@ interface AuthContextType {
   accessToken: string | null;
   loading: boolean;
   loginWithPatreon: () => void;
+  loginWithGoogle: () => void;
   devLogin: () => Promise<void>;
   logout: () => Promise<void>;
   refreshAuth: () => Promise<void>;
@@ -94,6 +95,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const loginWithPatreon = () => {
     window.location.href = `${API_URL}/api/auth/patreon`;
+  };
+
+  const loginWithGoogle = () => {
+    window.location.href = `${API_URL}/api/auth/google`;
   };
 
   const devLogin = async () => {
@@ -180,6 +185,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         accessToken,
         loading,
         loginWithPatreon,
+        loginWithGoogle,
         devLogin,
         logout,
         refreshAuth,
